@@ -81,3 +81,8 @@ variable "azure_tenant_id" {
   description = "Azure tenant ID"
   type        = string
 }
+
+variable "spacelift_commit_sha" {
+  description = "The Git SHA passed dynamically from Spacelift to force an apply"
+  type        = string
+}
