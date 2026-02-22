@@ -5,7 +5,6 @@ resource "azurerm_cosmosdb_sql_database" "workout" {
   account_name        = var.cosmos_db_account_name
 }
 
-# Cosmos DB Container for Workouts
 resource "azurerm_cosmosdb_sql_container" "workouts" {
   name                = "workouts"
   resource_group_name = var.resource_group_name
