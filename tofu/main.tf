@@ -7,20 +7,6 @@ resource "azurerm_resource_group" "workout" {
   location = var.location
 }
 
-# ============================================================================
-# Shared Infrastructure (Remote State)
-# ============================================================================
-
-data "terraform_remote_state" "infra" {
-  backend = "azurerm"
-  config = {
-    resource_group_name  = "infra"
-    storage_account_name = "tfstate6792"
-    container_name       = "tfstate"
-    key                  = "infra.tfstate"
-    use_oidc             = true
-  }
-}
 
 # ============================================================================
 # Note: User/developer role assignments for Cosmos DB should be managed
@@ -46,12 +32,12 @@ output "static_web_app_default_hostname" {
 
 
 output "cosmos_db_endpoint" {
-  value       = data.terraform_remote_state.infra.outputs.cosmos_db_endpoint
+  value       = var.cosmos_db_endpoint
   description = "Cosmos DB account endpoint"
 }
 
 output "cosmos_db_name" {
-  value       = data.terraform_remote_state.infra.outputs.cosmos_db_account_name
+  value       = var.cosmos_db_account_name
   description = "Cosmos DB account name"
 }
 

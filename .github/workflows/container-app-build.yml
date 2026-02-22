@@ -1,0 +1,18 @@
+# .github/workflows/ci-caller.yml
+name: Phase 1 - CI Build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  # The name of this job ("build-pipeline") becomes part of the final check name!
+  build-pipeline:
+    uses: nelsong6/infra-bootstrap/.github/workflows/ci-template.yml@main
+    with:
+      backend_directory: './backend'
+      image_name_suffix: 'workout-api'
+      node_version: '20'
+    secrets: inherit

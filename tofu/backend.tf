@@ -6,7 +6,7 @@
 resource "azurerm_container_app" "workout_api" {
   name                         = "workout-api"
   resource_group_name          = azurerm_resource_group.workout.name
-  container_app_environment_id = data.terraform_remote_state.infra.outputs.container_app_environment_id
+  container_app_environment_id = var.container_app_environment_id
   revision_mode                = "Single"
 
   # Enable system-assigned managed identity
@@ -26,7 +26,7 @@ resource "azurerm_container_app" "workout_api" {
       # Environment variables
       env {
         name  = "COSMOS_DB_ENDPOINT"
-        value = data.terraform_remote_state.infra.outputs.cosmos_db_endpoint
+        value = var.cosmos_db_endpoint
       }
 
       env {
@@ -68,7 +68,7 @@ resource "azurerm_container_app" "workout_api" {
       allowed_origins = [
         # Production: Default Azure hostname
         "https://${azurerm_static_web_app.workout.default_host_name}",
-        "https://${local.front_app_dns_name}.${data.terraform_remote_state.infra.outputs.dns_zone_name}",
+        "https://${local.front_app_dns_name}.${var.dns_zone_name}",
 
         # Development: Localhost ports for Vite
         "http://localhost:5173",
@@ -86,18 +86,18 @@ resource "azurerm_container_app" "workout_api" {
 
 # Grant Container App managed identity access to Cosmos DB
 resource "azurerm_cosmosdb_sql_role_assignment" "container_app_cosmos" {
-  resource_group_name = data.terraform_remote_state.infra.outputs.resource_group_name
-  account_name        = data.terraform_remote_state.infra.outputs.cosmos_db_account_name
-  role_definition_id  = "${data.terraform_remote_state.infra.outputs.cosmos_db_account_id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002" # Built-in Data Contributor
+  resource_group_name = var.resource_group_name
+  account_name        = var.cosmos_db_account_name
+  role_definition_id  = "${var.cosmos_db_account_id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002" # Built-in Data Contributor
   principal_id        = azurerm_container_app.workout_api.identity[0].principal_id
-  scope               = data.terraform_remote_state.infra.outputs.cosmos_db_account_id
+  scope               = var.cosmos_db_account_id
 }
 
 resource "auth0_resource_server" "backend_api" {
   name = "WorkoutTracker Backend API"
   # The audience identifier doesn't have to be a publicly routable URL, 
   # but using your domain is best practice to guarantee uniqueness.
-  identifier  = "https://api.${data.terraform_remote_state.infra.outputs.dns_zone_name}"
+  identifier  = "https://api.${var.dns_zone_name}"
   signing_alg = "RS256"
 
   # Allows the frontend to request refresh tokens so users stay logged in

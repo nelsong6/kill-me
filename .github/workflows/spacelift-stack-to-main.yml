@@ -1,0 +1,18 @@
+name: Reset Spacelift on PR Merge
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  # GitHub fires the "closed" event for BOTH merged and unmerged (abandoned) PRs.
+  # We use this if-condition to ensure it only runs if the PR was actually merged.
+  reset-spacelift:
+    if: github.event.pull_request.merged == true
+    uses: your-org/your-shared-repo/.github/workflows/spacelift-reset-branch.yml@main
+    with:
+      spacelift_endpoint: 'https://your-tenant.app.spacelift.io'
+      target_branch: 'main'
+    secrets:
+      spacelift_api_key_id: ${{ secrets.SPACELIFT_API_KEY_ID }}
+      spacelift_api_key_secret: ${{ secrets.SPACELIFT_API_KEY_SECRET }}
