@@ -14,11 +14,6 @@ output "static_web_app_default_hostname" {
   description = "Default hostname of the Static Web App"
 }
 
-output "cosmos_db_endpoint" {
-  value       = var.cosmos_db_endpoint
-  description = "Cosmos DB account endpoint"
-}
-
 output "cosmos_db_name" {
   value       = var.cosmos_db_account_name
   description = "Cosmos DB account name"

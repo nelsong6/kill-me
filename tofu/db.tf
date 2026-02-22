@@ -3,6 +3,7 @@ resource "azurerm_cosmosdb_sql_database" "workout" {
   name                = "WorkoutTrackerDB"
   resource_group_name = var.resource_group_name
   account_name        = var.cosmos_db_account_name
+  throughput          = 400
 }
 
 resource "azurerm_cosmosdb_sql_container" "workouts" {

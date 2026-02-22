@@ -67,11 +67,6 @@ variable "cosmos_db_account_id" {
   type        = string
 }
 
-variable "cosmos_db_endpoint" {
-  description = "Endpoint URL of the Cosmos DB account"
-  type        = string
-}
-
 variable "azure_subscription_id" {
   description = "Azure subscription ID"
   type        = string
@@ -84,5 +79,15 @@ variable "azure_tenant_id" {
 
 variable "spacelift_commit_sha" {
   description = "The Git SHA passed dynamically from Spacelift to force an apply"
+  type        = string
+}
+
+variable "azure_app_config_endpoint" {
+  description = "Endpoint URL of the Azure App Configuration store (e.g. https://<store>.azconfig.io)"
+  type        = string
+}
+
+variable "azure_app_config_resource_id" {
+  description = "Resource ID of the Azure App Configuration store (used for RBAC role assignment)"
   type        = string
 }

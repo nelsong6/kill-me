@@ -1,10 +1,18 @@
 import { auth } from 'express-oauth2-jwt-bearer';
 
-// Validates the Bearer JWT on protected routes.
-// On success: populates req.auth.payload (sub, email, etc.)
-// On failure: returns 401 Unauthorized automatically
-export const requireAuth = auth({
-  audience: process.env.AUTH0_AUDIENCE,
-  issuerBaseURL: `https://${process.env.AUTH0_DOMAIN}/`,
-  tokenSigningAlg: 'RS256',
-});
+/**
+ * Creates the Auth0 JWT validation middleware.
+ *
+ * Must be called after Azure App Configuration values are fetched,
+ * because auth() is a synchronous factory that reads its arguments immediately.
+ *
+ * @param {{ auth0Domain: string, auth0Audience: string }} config
+ * @returns {import('express').RequestHandler}
+ */
+export function createRequireAuth({ auth0Domain, auth0Audience }) {
+  return auth({
+    audience: auth0Audience,
+    issuerBaseURL: `https://${auth0Domain}/`,
+    tokenSigningAlg: 'RS256',
+  });
+}

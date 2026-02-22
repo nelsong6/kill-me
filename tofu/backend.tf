@@ -23,25 +23,14 @@ resource "azurerm_container_app" "workout_api" {
       cpu    = 0.25
       memory = "0.5Gi"
 
-      # Environment variables
-      env {
-        name  = "COSMOS_DB_ENDPOINT"
-        value = var.cosmos_db_endpoint
-      }
-
-      env {
-        name  = "COSMOS_DB_DATABASE_NAME"
-        value = azurerm_cosmosdb_sql_database.workout.name
-      }
-
-      env {
-        name  = "COSMOS_DB_CONTAINER_NAME"
-        value = azurerm_cosmosdb_sql_container.workouts.name
-      }
-
       env {
         name  = "PORT"
         value = "3000"
+      }
+
+      env {
+        name  = "AZURE_APP_CONFIG_ENDPOINT"
+        value = var.azure_app_config_endpoint
       }
 
       # Frontend URL will be set via environment variable or app config
@@ -91,6 +80,13 @@ resource "azurerm_cosmosdb_sql_role_assignment" "container_app_cosmos" {
   role_definition_id  = "${var.cosmos_db_account_id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002" # Built-in Data Contributor
   principal_id        = azurerm_container_app.workout_api.identity[0].principal_id
   scope               = var.cosmos_db_account_id
+}
+
+# Grant Container App managed identity read access to Azure App Configuration
+resource "azurerm_role_assignment" "container_app_appconfig_reader" {
+  scope                = var.azure_app_config_resource_id
+  role_definition_name = "App Configuration Data Reader"
+  principal_id         = azurerm_container_app.workout_api.identity[0].principal_id
 }
 
 resource "auth0_resource_server" "backend_api" {
