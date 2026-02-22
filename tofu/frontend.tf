@@ -24,8 +24,8 @@ locals {
 # 1. Create the CNAME record in your shared DNS zone
 resource "azurerm_dns_cname_record" "workout" {
   name                = local.front_app_dns_name
-  zone_name           = data.spacelift_stack_output.dns_zone_name.value
-  resource_group_name = data.spacelift_stack_output.resource_group_name.value
+  zone_name           = var.dns_zone_name
+  resource_group_name = var.resource_group_name
   ttl                 = 3600
   record              = azurerm_static_web_app.workout.default_host_name
 }
@@ -33,7 +33,7 @@ resource "azurerm_dns_cname_record" "workout" {
 # 2. Bind the custom domain to the Static Web App
 resource "azurerm_static_web_app_custom_domain" "workout" {
   static_web_app_id = azurerm_static_web_app.workout.id
-  domain_name       = "${local.front_app_dns_name}.${data.spacelift_stack_output.dns_zone_name.value}"
+  domain_name       = "${local.front_app_dns_name}.${var.dns_zone_name}"
   validation_type   = "cname-delegation"
 
   # Ensure the DNS record exists before Azure tries to validate the domain
@@ -49,19 +49,19 @@ resource "auth0_client" "frontend_spa" {
   # Includes your local Vite dev server and the future Azure Static Web App URL.
   callbacks = [
     "http://localhost:5173",
-    "https://${local.front_app_dns_name}.${data.spacelift_stack_output.dns_zone_name.value}"
+    "https://${local.front_app_dns_name}.${var.dns_zone_name}"
   ]
 
   # Where users are allowed to be sent after clicking logout
   allowed_logout_urls = [
     "http://localhost:5173",
-    "https://${local.front_app_dns_name}.${data.spacelift_stack_output.dns_zone_name.value}"
+    "https://${local.front_app_dns_name}.${var.dns_zone_name}"
   ]
 
   # Enforces CORS so only your domain and localhost can make requests to Auth0
   web_origins = [
     "http://localhost:5173",
-    "https://${local.front_app_dns_name}.${data.spacelift_stack_output.dns_zone_name.value}"
+    "https://${local.front_app_dns_name}.${var.dns_zone_name}"
   ]
 
   jwt_configuration {

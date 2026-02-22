@@ -7,43 +7,6 @@ resource "azurerm_resource_group" "workout" {
   location = var.location
 }
 
-# ============================================================================
-# Shared Infrastructure (Spacelift Stack Outputs)
-# ============================================================================
-
-locals {
-  infra_stack_id = "infra-bootstrap"
-}
-
-data "spacelift_stack_output" "resource_group_name" {
-  stack_id = local.infra_stack_id
-  name     = "resource_group_name"
-}
-
-data "spacelift_stack_output" "cosmos_db_endpoint" {
-  stack_id = local.infra_stack_id
-  name     = "cosmos_db_endpoint"
-}
-
-data "spacelift_stack_output" "cosmos_db_account_name" {
-  stack_id = local.infra_stack_id
-  name     = "cosmos_db_account_name"
-}
-
-data "spacelift_stack_output" "cosmos_db_account_id" {
-  stack_id = local.infra_stack_id
-  name     = "cosmos_db_account_id"
-}
-
-data "spacelift_stack_output" "dns_zone_name" {
-  stack_id = local.infra_stack_id
-  name     = "dns_zone_name"
-}
-
-data "spacelift_stack_output" "container_app_environment_id" {
-  stack_id = local.infra_stack_id
-  name     = "container_app_environment_id"
-}
 
 # ============================================================================
 # Note: User/developer role assignments for Cosmos DB should be managed
@@ -69,12 +32,12 @@ output "static_web_app_default_hostname" {
 
 
 output "cosmos_db_endpoint" {
-  value       = data.spacelift_stack_output.cosmos_db_endpoint.value
+  value       = var.cosmos_db_endpoint
   description = "Cosmos DB account endpoint"
 }
 
 output "cosmos_db_name" {
-  value       = data.spacelift_stack_output.cosmos_db_account_name.value
+  value       = var.cosmos_db_account_name
   description = "Cosmos DB account name"
 }
 

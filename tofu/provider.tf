@@ -5,10 +5,6 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.0"
     }
-    spacelift = {
-      source  = "spacelift-io/spacelift"
-      version = "~> 1.0"
-    }
   }
 }
 
@@ -16,8 +12,6 @@ provider "azurerm" {
   features {}
   use_oidc = true # Enable OIDC authentication
 }
-
-provider "spacelift" {}
 
 provider "auth0" {
   domain        = "dev-gtdi5x5p0nmticqd.us.auth0.com"
