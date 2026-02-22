@@ -97,6 +97,19 @@ resource "azurerm_role_assignment" "container_app_appconfig_reader" {
   principal_id         = azurerm_container_app.workout_api.identity[0].principal_id
 }
 
+# 1. The Verification Record (Proves to Azure you own the domain)
+resource "azurerm_dns_txt_record" "workout_api_verification" {
+  name                = "asuid.${local.back_app_dns_name}"
+  zone_name           = var.dns_zone_name
+  resource_group_name = var.resource_group_name
+  ttl                 = 3600
+
+  record {
+    value = azurerm_container_app.workout_api.custom_domain_verification_id
+  }
+}
+
+# 2. The Routing Record (Points to the container ingress)
 resource "azurerm_dns_cname_record" "workout_api" {
   name                = local.back_app_dns_name
   zone_name           = var.dns_zone_name
@@ -105,27 +118,22 @@ resource "azurerm_dns_cname_record" "workout_api" {
   record              = azurerm_container_app.workout_api.ingress[0].fqdn
 }
 
-# Managed TLS certificate validated via the CNAME above
-resource "azurerm_container_app_environment_managed_certificate" "workout_api" {
-  name                         = "${local.back_app_dns_name}-cert"
-  container_app_environment_id = var.container_app_environment_id
-  domain_name                  = "${local.back_app_dns_name}.${azurerm_dns_cname_record.workout_api.zone_name}"
-  domain_validation_type       = "CNAME"
-}
-
-# Bind the custom domain to the Container App
+# 3. The Custom Domain & Managed Certificate Binding
 resource "azurerm_container_app_custom_domain" "workout_api" {
-  name                                     = "${local.back_app_dns_name}.${var.dns_zone_name}"
-  container_app_id                         = azurerm_container_app.workout_api.id
-  container_app_environment_certificate_id = azurerm_container_app_environment_managed_certificate.workout_api.id
-  certificate_binding_type                 = "SniEnabled"
+  name                     = "${local.back_app_dns_name}.${var.dns_zone_name}"
+  container_app_id         = azurerm_container_app.workout_api.id
+  certificate_binding_type = "Managed"
+
+  depends_on = [
+    azurerm_dns_txt_record.workout_api_verification,
+    azurerm_dns_cname_record.workout_api
+  ]
 }
 
+# 4. The Auth0 Resource Server
 resource "auth0_resource_server" "backend_api" {
-  name = "WorkoutTracker Backend API"
-  # The audience identifier doesn't have to be a publicly routable URL, 
-  # but using your domain is best practice to guarantee uniqueness.
-  identifier  = "https://api.${var.dns_zone_name}"
+  name        = "WorkoutTracker Backend API"
+  identifier  = "https://${local.back_app_dns_name}.${var.dns_zone_name}"
   signing_alg = "RS256"
 
   # Allows the frontend to request refresh tokens so users stay logged in
