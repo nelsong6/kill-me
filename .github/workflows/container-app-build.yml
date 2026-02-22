@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-pipeline:
-    uses: nelsong6/infra-bootstrap/.github/workflows/container-app-build-template.yml@main
+    uses: nelsong6/pipeline-templates/.github/workflows/container-app-build-template.yml@main
     with:
       node_version: '20'
     secrets: inherit
