@@ -1,5 +1,9 @@
 name: Phase 1 - CI Build
 
+permissions:
+  contents: read
+  packages: write
+
 on:
   push:
     branches: [ "main" ]
