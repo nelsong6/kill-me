@@ -58,5 +58,7 @@ variable "commit_sha" {
 }
 
 resource "terraform_data" "cd_webhook_trigger" {
-  input = var.commit_sha
+  triggers_replace = [
+    var.commit_sha
+  ]
 }
