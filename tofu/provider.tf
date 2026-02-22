@@ -17,17 +17,6 @@ provider "azurerm" {
   use_oidc = true # Enable OIDC authentication
 }
 
-
-provider "infisical" {
-  host = "https://app.infisical.com"
-  auth = {
-    oidc = {
-      identity_id                     = "474b7b4f-9205-48f6-8ae1-2f4f2a248af1"
-      token_environment_variable_name = "GITHUB_OIDC_TOKEN" 
-    }
-  }
-}
-
 provider "spacelift" {}
 
 provider "auth0" {
