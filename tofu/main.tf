@@ -52,3 +52,11 @@ output "cosmos_db_container_name" {
   description = "Cosmos DB container name for workouts"
 }
 
+variable "commit_sha" {
+  type        = string
+  description = "The Git SHA passed dynamically from Spacelift to force an apply"
+}
+
+resource "terraform_data" "cd_webhook_trigger" {
+  input = var.commit_sha
+}
