@@ -1,10 +1,6 @@
-terraform {
-  required_version = ">= 1.6.0"
-}
-
 provider "azurerm" {
   features {}
-  use_oidc = true # Enable OIDC authentication
+  use_oidc = true
 }
 
 provider "auth0" {
