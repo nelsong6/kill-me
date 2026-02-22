@@ -33,3 +33,8 @@ output "backend_api_url" {
   value       = "https://${local.back_app_dns_name}.${var.dns_zone_name}"
   description = "The URL of the backend Container App API"
 }
+
+output "container_app_name" {
+  value       = azurerm_container_app.workout_api.name
+  description = "Name of the backend Container App, picked up by github actions to handle custom dns for container app."
+}
