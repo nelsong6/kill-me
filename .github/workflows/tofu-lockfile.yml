@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   update-lockfile:
-    uses: ./.github/workflows/update-lockfile-template.yml
+    uses: nelsong6/pipeline-templates/.github/workflows/tofu-lockfile-template.yml@main
     with:
       working_directory: '.'    # Change this if your code lives in a subdirectory
       environment_name: 'prod'  # Must match the Environment name in your GitHub Repo settings
