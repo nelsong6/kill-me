@@ -7,3 +7,8 @@ variable "location" {
   type        = string
   default     = "westus2"
 }
+
+variable "auth0_client_secret" {
+  type      = string
+  sensitive = true
+}

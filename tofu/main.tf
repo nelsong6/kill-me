@@ -8,18 +8,41 @@ resource "azurerm_resource_group" "workout" {
 }
 
 # ============================================================================
-# Shared Infrastructure (Remote State)
+# Shared Infrastructure (Spacelift Stack Outputs)
 # ============================================================================
 
-data "terraform_remote_state" "infra" {
-  backend = "azurerm"
-  config = {
-    resource_group_name  = "infra"
-    storage_account_name = "tfstate6792"
-    container_name       = "tfstate"
-    key                  = "infra.tfstate"
-    use_oidc             = true
-  }
+locals {
+  infra_stack_id = "infra-bootstrap"
+}
+
+data "spacelift_stack_output" "resource_group_name" {
+  stack_id = local.infra_stack_id
+  name     = "resource_group_name"
+}
+
+data "spacelift_stack_output" "cosmos_db_endpoint" {
+  stack_id = local.infra_stack_id
+  name     = "cosmos_db_endpoint"
+}
+
+data "spacelift_stack_output" "cosmos_db_account_name" {
+  stack_id = local.infra_stack_id
+  name     = "cosmos_db_account_name"
+}
+
+data "spacelift_stack_output" "cosmos_db_account_id" {
+  stack_id = local.infra_stack_id
+  name     = "cosmos_db_account_id"
+}
+
+data "spacelift_stack_output" "dns_zone_name" {
+  stack_id = local.infra_stack_id
+  name     = "dns_zone_name"
+}
+
+data "spacelift_stack_output" "container_app_environment_id" {
+  stack_id = local.infra_stack_id
+  name     = "container_app_environment_id"
 }
 
 # ============================================================================
@@ -46,12 +69,12 @@ output "static_web_app_default_hostname" {
 
 
 output "cosmos_db_endpoint" {
-  value       = data.terraform_remote_state.infra.outputs.cosmos_db_endpoint
+  value       = data.spacelift_stack_output.cosmos_db_endpoint.value
   description = "Cosmos DB account endpoint"
 }
 
 output "cosmos_db_name" {
-  value       = data.terraform_remote_state.infra.outputs.cosmos_db_account_name
+  value       = data.spacelift_stack_output.cosmos_db_account_name.value
   description = "Cosmos DB account name"
 }
 
