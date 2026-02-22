@@ -8,7 +8,7 @@ on:
 jobs:
   call-deployment-template:
     # Point this to wherever you store your centralized workflows
-    uses: nelsong6/infra-bootstrap/.github/workflows/full-stack-deploy-template.yml@main
+    uses: nelsong6/pipeline-templates/.github/workflows/full-stack-deploy-template.yml@main
     with:
       # Extract the SHA from the webhook and pass it as an input
       target_sha: ${{ github.event.client_payload.commit_sha }}
