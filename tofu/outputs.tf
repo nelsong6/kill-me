@@ -28,3 +28,8 @@ output "cosmos_db_container_name" {
   value       = azurerm_cosmosdb_sql_container.workouts.name
   description = "Cosmos DB container name for workouts"
 }
+
+output "backend_api_url" {
+  value       = "https://${azurerm_container_app.workout_api.latest_revision_fqdn}"
+  description = "The URL of the backend Container App API"
+}
