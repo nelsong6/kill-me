@@ -2,6 +2,10 @@
 # Azure Container Apps (Serverless Container Hosting)
 # ============================================================================
 
+locals {
+  back_app_dns_name = "${local.front_app_dns_name}.api"
+}
+
 # Container App for the backend API
 resource "azurerm_container_app" "workout_api" {
   name                         = "workout-api"
@@ -39,7 +43,6 @@ resource "azurerm_container_app" "workout_api" {
       }
 
       # Frontend URL will be set via environment variable or app config
-      # Custom domain configuration is managed by core infrastructure repo
     }
 
     min_replicas = 0 # Scale to zero when not in use
@@ -92,6 +95,30 @@ resource "azurerm_role_assignment" "container_app_appconfig_reader" {
   scope                = var.azure_app_config_resource_id
   role_definition_name = "App Configuration Data Reader"
   principal_id         = azurerm_container_app.workout_api.identity[0].principal_id
+}
+
+resource "azurerm_dns_cname_record" "workout_api" {
+  name                = local.back_app_dns_name
+  zone_name           = var.dns_zone_name
+  resource_group_name = var.resource_group_name
+  ttl                 = 3600
+  record              = azurerm_container_app.workout_api.ingress[0].fqdn
+}
+
+# Managed TLS certificate validated via the CNAME above
+resource "azurerm_container_app_environment_managed_certificate" "workout_api" {
+  name                         = "${local.back_app_dns_name}-cert"
+  container_app_environment_id = var.container_app_environment_id
+  domain_name                  = "${local.back_app_dns_name}.${azurerm_dns_cname_record.workout_api.zone_name}"
+  domain_validation_type       = "CNAME"
+}
+
+# Bind the custom domain to the Container App
+resource "azurerm_container_app_custom_domain" "workout_api" {
+  name                                     = "${local.back_app_dns_name}.${var.dns_zone_name}"
+  container_app_id                         = azurerm_container_app.workout_api.id
+  container_app_environment_certificate_id = azurerm_container_app_environment_managed_certificate.workout_api.id
+  certificate_binding_type                 = "SniEnabled"
 }
 
 resource "auth0_resource_server" "backend_api" {

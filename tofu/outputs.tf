@@ -30,6 +30,6 @@ output "cosmos_db_container_name" {
 }
 
 output "backend_api_url" {
-  value       = "https://${azurerm_container_app.workout_api.latest_revision_fqdn}"
+  value       = "https://${local.back_app_dns_name}.${var.dns_zone_name}"
   description = "The URL of the backend Container App API"
 }
