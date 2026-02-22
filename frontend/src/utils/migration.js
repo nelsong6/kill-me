@@ -1,7 +1,6 @@
 // Migration utility to move data from LocalStorage to Cosmos DB
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-const USER_ID = 'anonymous'; // TODO: Replace with actual user ID from auth
 
 const MIGRATION_KEY = 'workout-migration-completed';
 const WORKOUTS_KEY = 'workouts';
@@ -16,7 +15,7 @@ export const hasLocalStorageData = () => {
   return workouts && workouts !== '[]';
 };
 
-export const migrateLocalStorageToAPI = async () => {
+export const migrateLocalStorageToAPI = async (getToken) => {
   try {
     // Check if already migrated
     if (checkMigrationStatus()) {
@@ -39,14 +38,17 @@ export const migrateLocalStorageToAPI = async () => {
     console.log(`📦 Found ${workouts.length} workouts in LocalStorage`);
 
     // Migrate workouts
+    const token = await getToken();
+    const authHeaders = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    };
+
     let migratedCount = 0;
     if (workouts.length > 0) {
       const response = await fetch(`${API_URL}/api/workouts/bulk`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-ID': USER_ID
-        },
+        headers: authHeaders,
         body: JSON.stringify({ workouts })
       });
 
@@ -67,10 +69,7 @@ export const migrateLocalStorageToAPI = async () => {
     if (currentDay) {
       const dayResponse = await fetch(`${API_URL}/api/current-day`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-ID': USER_ID
-        },
+        headers: authHeaders,
         body: JSON.stringify({ currentDay: parseInt(currentDay) })
       });
 

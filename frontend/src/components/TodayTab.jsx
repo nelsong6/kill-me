@@ -3,9 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { DAY_CONFIG } from '../utils/dayConfig';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-const USER_ID = 'cf57d57d-1411-4f59-b517-e9a8600b140a';
 
-export function TodayTab({ currentDay, onDayChange }) {
+export function TodayTab({ currentDay, onDayChange, getToken }) {
   const [mode, setMode] = useState('quick'); // 'quick' or 'detailed'
   const [workoutDay, setWorkoutDay] = useState(null);
   const [exercises, setExercises] = useState([]);
@@ -66,11 +65,12 @@ export function TodayTab({ currentDay, onDayChange }) {
   const handleQuickLog = async () => {
     setLogging(true);
     try {
+      const token = await getToken();
       const response = await fetch(`${API_URL}/api/log-workout`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-User-ID': USER_ID
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           dayNumber: currentDay,
@@ -100,11 +100,12 @@ export function TodayTab({ currentDay, onDayChange }) {
 
     setLogging(true);
     try {
+      const token = await getToken();
       const response = await fetch(`${API_URL}/api/log-workout`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-User-ID': USER_ID
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           dayNumber: currentDay,

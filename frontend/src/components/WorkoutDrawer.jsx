@@ -3,9 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { getDayInfo, DAY_CONFIG } from '../utils/dayConfig';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-const USER_ID = 'cf57d57d-1411-4f59-b517-e9a8600b140a';
 
-export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate = null, onSuccess, onOpenDrawer, currentDay = 1 }) {
+export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate = null, onSuccess, onOpenDrawer, currentDay = 1, getToken }) {
   const [selectedDay, setSelectedDay] = useState(initialDay || currentDay);
   const [selectedDate, setSelectedDate] = useState(initialDate || new Date().toISOString().split('T')[0]);
   const [mode, setMode] = useState('quick'); // 'quick' or 'detailed'
@@ -114,11 +113,12 @@ export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate 
   const handleQuickLog = async () => {
     setLogging(true);
     try {
+      const token = await getToken();
       const response = await fetch(`${API_URL}/api/log-workout`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-User-ID': USER_ID
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           dayNumber: selectedDay,
@@ -150,11 +150,12 @@ export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate 
 
     setLogging(true);
     try {
+      const token = await getToken();
       const response = await fetch(`${API_URL}/api/log-workout`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-User-ID': USER_ID
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
           dayNumber: selectedDay,

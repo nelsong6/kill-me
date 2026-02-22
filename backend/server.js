@@ -6,6 +6,7 @@ import morgan from 'morgan';
 import { CosmosClient } from '@azure/cosmos';
 import { DefaultAzureCredential } from '@azure/identity';
 import { workoutDays, loggedWorkouts, exercises } from './seed-data.js';
+import { requireAuth } from './middleware/auth.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -31,9 +32,9 @@ app.use(cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: false,
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-user-id']
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
@@ -72,7 +73,7 @@ app.get('/health', (req, res) => {
 });
 
 // Database initialization endpoint (admin only)
-app.post('/api/admin/init-database', async (req, res) => {
+app.post('/api/admin/init-database', requireAuth, async (req, res) => {
   try {
     const credential = new DefaultAzureCredential();
     const client = new CosmosClient({
@@ -230,9 +231,9 @@ app.get('/api/exercises/day/:dayNumber', async (req, res) => {
 });
 
 // Get logged workouts for a user
-app.get('/api/logged-workouts', async (req, res) => {
+app.get('/api/logged-workouts', requireAuth, async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] || 'cf57d57d-1411-4f59-b517-e9a8600b140a';
+    const userId = req.auth.payload.sub;
     
     const querySpec = {
       query: 'SELECT * FROM c WHERE c.type = @type AND c.userId = @userId ORDER BY c.date DESC',
@@ -252,9 +253,9 @@ app.get('/api/logged-workouts', async (req, res) => {
 });
 
 // Log a completed workout (quick mode)
-app.post('/api/log-workout', async (req, res) => {
+app.post('/api/log-workout', requireAuth, async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] || 'cf57d57d-1411-4f59-b517-e9a8600b140a';
+    const userId = req.auth.payload.sub;
     const { dayNumber, dayName, mode, exercises: completedExercises } = req.body;
     
     if (!dayNumber) {
@@ -286,9 +287,9 @@ app.post('/api/log-workout', async (req, res) => {
 });
 
 // Get all workouts for a user (legacy endpoint - returns old format)
-app.get('/api/workouts', async (req, res) => {
+app.get('/api/workouts', requireAuth, async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] || 'cf57d57d-1411-4f59-b517-e9a8600b140a';
+    const userId = req.auth.payload.sub;
     
     const querySpec = {
       query: 'SELECT * FROM c WHERE c.type = @type AND c.userId = @userId ORDER BY c.date DESC',
@@ -319,9 +320,9 @@ app.get('/api/workouts', async (req, res) => {
 });
 
 // Get workouts by day
-app.get('/api/workouts/day/:dayNumber', async (req, res) => {
+app.get('/api/workouts/day/:dayNumber', requireAuth, async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] || 'anonymous';
+    const userId = req.auth.payload.sub;
     const dayNumber = parseInt(req.params.dayNumber);
     
     if (isNaN(dayNumber) || dayNumber < 1 || dayNumber > 12) {
@@ -348,9 +349,9 @@ app.get('/api/workouts/day/:dayNumber', async (req, res) => {
 });
 
 // Create a new workout
-app.post('/api/workouts', async (req, res) => {
+app.post('/api/workouts', requireAuth, async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] || 'anonymous';
+    const userId = req.auth.payload.sub;
     const workout = req.body;
     
     // Validate required fields
@@ -377,9 +378,9 @@ app.post('/api/workouts', async (req, res) => {
 });
 
 // Bulk import workouts (for migration)
-app.post('/api/workouts/bulk', async (req, res) => {
+app.post('/api/workouts/bulk', requireAuth, async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] || 'anonymous';
+    const userId = req.auth.payload.sub;
     const { workouts } = req.body;
     
     if (!Array.isArray(workouts)) {
@@ -419,9 +420,9 @@ app.post('/api/workouts/bulk', async (req, res) => {
 });
 
 // Delete a workout
-app.delete('/api/workouts/:id', async (req, res) => {
+app.delete('/api/workouts/:id', requireAuth, async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] || 'anonymous';
+    const userId = req.auth.payload.sub;
     const workoutId = req.params.id;
     
     // Delete the workout
@@ -438,9 +439,9 @@ app.delete('/api/workouts/:id', async (req, res) => {
 });
 
 // Get current day (user-specific)
-app.get('/api/current-day', async (req, res) => {
+app.get('/api/current-day', requireAuth, async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] || 'anonymous';
+    const userId = req.auth.payload.sub;
     
     // Query for user settings document
     const querySpec = {
@@ -464,9 +465,9 @@ app.get('/api/current-day', async (req, res) => {
 });
 
 // Update current day
-app.put('/api/current-day', async (req, res) => {
+app.put('/api/current-day', requireAuth, async (req, res) => {
   try {
-    const userId = req.headers['x-user-id'] || 'anonymous';
+    const userId = req.auth.payload.sub;
     const { currentDay } = req.body;
     
     if (!currentDay || currentDay < 1 || currentDay > 12) {

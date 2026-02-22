@@ -1,22 +1,24 @@
 import { useState, useEffect } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-const USER_ID = 'cf57d57d-1411-4f59-b517-e9a8600b140a'; // Your Azure AD Object ID
 
-export const useWorkouts = () => {
+export const useWorkouts = (getToken) => {
   const [currentDay, setCurrentDay] = useState(1);
   const [workouts, setWorkouts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const authHeaders = async () => ({
+    'Authorization': `Bearer ${await getToken()}`,
+    'Content-Type': 'application/json',
+  });
 
   // Fetch current day from API
   useEffect(() => {
     const fetchCurrentDay = async () => {
       try {
         const response = await fetch(`${API_URL}/api/current-day`, {
-          headers: {
-            'X-User-ID': USER_ID
-          }
+          headers: await authHeaders(),
         });
         if (response.ok) {
           const data = await response.json();
@@ -36,9 +38,7 @@ export const useWorkouts = () => {
       setError(null);
       try {
         const response = await fetch(`${API_URL}/api/workouts`, {
-          headers: {
-            'X-User-ID': USER_ID
-          }
+          headers: await authHeaders(),
         });
         
         if (!response.ok) {
@@ -62,10 +62,7 @@ export const useWorkouts = () => {
     try {
       const response = await fetch(`${API_URL}/api/workouts`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-ID': USER_ID
-        },
+        headers: await authHeaders(),
         body: JSON.stringify(workout)
       });
 
@@ -87,9 +84,7 @@ export const useWorkouts = () => {
     try {
       const response = await fetch(`${API_URL}/api/workouts/${id}`, {
         method: 'DELETE',
-        headers: {
-          'X-User-ID': USER_ID
-        }
+        headers: await authHeaders(),
       });
 
       if (!response.ok) {
@@ -113,10 +108,7 @@ export const useWorkouts = () => {
     try {
       const response = await fetch(`${API_URL}/api/current-day`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-ID': USER_ID
-        },
+        headers: await authHeaders(),
         body: JSON.stringify({ currentDay: day })
       });
 

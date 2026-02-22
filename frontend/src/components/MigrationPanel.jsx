@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { migrateLocalStorageToAPI, hasLocalStorageData, checkMigrationStatus } from '../utils/migration';
+import { useAuth } from '../hooks/useAuth';
 
 export function MigrationPanel() {
+  const { getToken } = useAuth();
   const [status, setStatus] = useState('idle'); // idle, migrating, success, error
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -14,7 +16,7 @@ export function MigrationPanel() {
     setError(null);
 
     try {
-      const migrationResult = await migrateLocalStorageToAPI();
+      const migrationResult = await migrateLocalStorageToAPI(getToken);
       
       if (migrationResult.success) {
         setStatus('success');

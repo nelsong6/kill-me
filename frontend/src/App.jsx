@@ -1,15 +1,19 @@
 import { useState } from 'react';
 import { useWorkouts } from './hooks/useWorkouts';
+import { useAuth } from './hooks/useAuth';
 import { TodayTab } from './components/TodayTab';
 import { HistoryTab } from './components/HistoryTab';
 import { MigrationPanel } from './components/MigrationPanel';
 import { DatabaseInit } from './components/DatabaseInit';
 import { WorkoutDrawer } from './components/WorkoutDrawer';
+import { AuthGuard } from './components/AuthGuard';
+import { UserProfile } from './components/UserProfile';
 import { isAdminMode } from './utils/adminMode';
 
 function App() {
   const [activeTab, setActiveTab] = useState('history');
-  const { currentDay, setDay } = useWorkouts();
+  const { getToken } = useAuth();
+  const { currentDay, setDay } = useWorkouts(getToken);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerInitialDay, setDrawerInitialDay] = useState(null);
   const [drawerInitialDate, setDrawerInitialDate] = useState(null);
@@ -41,6 +45,7 @@ function App() {
   ];
 
   return (
+    <AuthGuard>
     <div className="min-h-screen bg-gradient-to-br from-black via-slate-950 to-slate-900 overflow-x-hidden">
       <div className="max-w-6xl mx-auto px-4 py-6">
         {/* Minimal Header */}
@@ -55,9 +60,12 @@ function App() {
               </div>
             )}
           </div>
-          <div className="text-right">
-            <div className="text-xs text-slate-500 font-mono">
-              Build: {__BUILD_NUMBER__}
+          <div className="flex items-center gap-4">
+            <UserProfile />
+            <div className="text-right">
+              <div className="text-xs text-slate-500 font-mono">
+                Build: {__BUILD_NUMBER__}
+              </div>
             </div>
           </div>
         </div>
@@ -88,13 +96,13 @@ function App() {
         <div className="bg-slate-900/40 backdrop-blur-md rounded-b-2xl border border-t-0 border-slate-700/50 p-8 min-h-[600px]">
           {activeTab === 'today' && (
             <div className="animate-fadeIn">
-              <TodayTab currentDay={currentDay} onDayChange={setDay} />
+              <TodayTab currentDay={currentDay} onDayChange={setDay} getToken={getToken} />
             </div>
           )}
 
           {activeTab === 'history' && (
             <div className="animate-fadeIn">
-              <HistoryTab key={refreshKey} onDayClick={handleOpenDrawer} />
+              <HistoryTab key={refreshKey} onDayClick={handleOpenDrawer} getToken={getToken} />
             </div>
           )}
 
@@ -118,8 +126,10 @@ function App() {
         currentDay={currentDay}
         onSuccess={handleWorkoutSuccess}
         onOpenDrawer={handleOpenDrawer}
+        getToken={getToken}
       />
     </div>
+    </AuthGuard>
   );
 }
 

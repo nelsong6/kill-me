@@ -3,9 +3,8 @@ import { motion } from 'framer-motion';
 import { DAY_CONFIG } from '../utils/dayConfig';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-const USER_ID = 'cf57d57d-1411-4f59-b517-e9a8600b140a';
 
-export function HistoryTab({ onDayClick }) {
+export function HistoryTab({ onDayClick, getToken }) {
   const [view, setView] = useState('calendar'); // 'calendar' or 'list'
   const [calendarPeriod, setCalendarPeriod] = useState('month'); // 'week', 'month', or 'year'
   const [workouts, setWorkouts] = useState([]);
@@ -25,10 +24,11 @@ export function HistoryTab({ onDayClick }) {
   const fetchWorkouts = async () => {
     setLoading(true);
     try {
+      const token = await getToken();
       const response = await fetch(`${API_URL}/api/logged-workouts`, {
         headers: {
-          'X-User-ID': USER_ID
-        }
+          'Authorization': `Bearer ${token}`,
+        },
       });
 
       if (response.ok) {
