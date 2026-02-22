@@ -33,6 +33,11 @@ resource "azurerm_container_app" "workout_api" {
         value = var.azure_app_config_endpoint
       }
 
+      env {
+        name  = "APP_CONFIG_PREFIX"
+        value = local.front_app_dns_name
+      }
+
       # Frontend URL will be set via environment variable or app config
       # Custom domain configuration is managed by core infrastructure repo
     }
