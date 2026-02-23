@@ -5,7 +5,7 @@ resource "azurerm_cosmosdb_sql_database" "workout" {
   account_name        = var.cosmos_db_account_name
   # throughput          = 400 # I tried setting this but azurerm didn't like it, and it's already 400 in the
   lifecycle {
-    ignore_changes = [ throughput ]
+    ignore_changes = [throughput]
   }
 }
 

@@ -28,7 +28,7 @@ resource "azurerm_static_web_app_custom_domain" "workout" {
   static_web_app_id = azurerm_static_web_app.workout.id
   domain_name       = "${local.front_app_dns_name}.${var.dns_zone_name}"
   validation_type   = "cname-delegation"
-  depends_on = [azurerm_dns_cname_record.workout]
+  depends_on        = [azurerm_dns_cname_record.workout]
 }
 
 resource "auth0_client" "frontend_spa" {
