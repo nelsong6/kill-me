@@ -1,0 +1,60 @@
+# PROJECT CONTEXT & RULES
+
+## 1. Core Logic: The 12-Day Synergy System
+This app tracks a 12-day asynchronous workout cycle.
+STRICTLY ENFORCE these rules in the UI and Logic:
+
+1.  **Compound: Legs** (Squat focus).
+2.  **Calves** (Active recovery).
+3.  **Hamstrings** (Main Lift: RDL).
+4.  **Abs** (Flexion focus).
+5.  **Compound: Pulls** (Back/Rows).
+6.  **Bicep** (Accessory).
+7.  **Torso** (Extension/Rotation).
+8.  **Pecs (Mobility)**: ⚠️ CRITICAL: NO DIPS or HEAVY PRESSING. Light flys/holds only.
+9.  **Compound: Push**: (DB Bench). Dips allowed here.
+10. **Triceps**: (Cable High Cross). NO pushdowns (user preference).
+11. **Deltoid**: (Rear/Side isolation).
+12. **Grip**: (Forearm burnout).
+
+## 2. Architecture & Infrastructure (DevOps Resume Focus)
+The project serves as a "Cloud Native" portfolio piece.
+- **Hosting:** Azure Static Web Apps (Free Tier).
+- **Database:** Azure Cosmos DB for NoSQL (Free Tier).
+- **Security & Auth:**
+  - **Mechanism:** OIDC (Workload Identity Federation) for GitHub Actions.
+  - **Constraint:** STRICTLY FORBID storing Client Secrets or Keys in GitHub.
+  - **Terraform:** Must use `use_oidc = true` in the provider block.
+- **IaC:** Terraform (Store state in Azure Storage Account).
+- **CI/CD:** GitHub Actions.
+
+## 3. Tech Stack Constraints
+- **Frontend:** React + Vite + Tailwind CSS.
+- **State Management:** LocalStorage (MVP) -> Cosmos DB (Phase 2).
+- **Styling Libraries:**
+  - `lucide-react` (Icons).
+  - `framer-motion` (Animations).
+  - `clsx` / `tailwind-merge` (Utility management).
+
+## 4. User Preferences
+- **Shoulder Health:** Prioritize specific warnings on Day 8 (Pecs/Mobility).
+- **Aesthetic:** "Dark Mode" exclusively.
+
+## 5. UI/UX Directives (The "Apple Fitness+" Vibe)
+Maintain a "Premium Fitness App" aesthetic in all future code generation.
+- **Typography:** Inter font (Google Fonts). Headers must be massive (text-6xl+) and bold.
+- **Cards:** Glassmorphism (`backdrop-blur-md`, `bg-white/5`, thin white borders).
+- **Visual Hierarchy:**
+  - **Active Day:** Glowing "Electric Blue" gradient.
+  - **Warnings:** "Warning Amber" or Red pulse for safety rules.
+  - **Progress:** Slim, glowing progress bar.
+- **Interactions:** Smooth slide transitions (`framer-motion`) and subtle button scale effects.
+- **Mobile:** Touch targets >= 44px.
+
+## 6. Action Protocol
+When asked to deploy or configure infrastructure:
+1.  Always prefer **Terraform HCL** over manual CLI commands.
+2.  Ensure Terraform resource names include random suffixes to avoid global naming conflicts (especially for Cosmos DB).
+3.  Generate valid GitHub Actions YAML for the `.github/workflows` directory.
+
+Don't run cd frontend && npm run dev, because this is not bash.
