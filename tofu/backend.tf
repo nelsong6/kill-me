@@ -10,7 +10,7 @@ locals {
 resource "azurerm_container_app" "workout_api" {
   name                         = "workout-api"
   resource_group_name          = azurerm_resource_group.workout.name
-  container_app_environment_id = var.container_app_environment_id
+  container_app_environment_id = local.infra.container_app_environment_id
   revision_mode                = "Single"
 
   # Enable system-assigned managed identity
@@ -34,7 +34,7 @@ resource "azurerm_container_app" "workout_api" {
 
       env {
         name  = "AZURE_APP_CONFIG_ENDPOINT"
-        value = var.azure_app_config_endpoint
+        value = local.infra.azure_app_config_endpoint
       }
 
       env {
@@ -65,7 +65,7 @@ resource "azurerm_container_app" "workout_api" {
       allowed_origins = [
         # Production: Default Azure hostname
         "https://${azurerm_static_web_app.workout.default_host_name}",
-        "https://${local.front_app_dns_name}.${var.dns_zone_name}",
+        "https://${local.front_app_dns_name}.${local.infra.dns_zone_name}",
 
         # Development: Localhost ports for Vite
         "http://localhost:5173",
@@ -83,16 +83,16 @@ resource "azurerm_container_app" "workout_api" {
 
 # Grant Container App managed identity access to Cosmos DB
 resource "azurerm_cosmosdb_sql_role_assignment" "container_app_cosmos" {
-  resource_group_name = var.resource_group_name
-  account_name        = var.cosmos_db_account_name
-  role_definition_id  = "${var.cosmos_db_account_id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002" # Built-in Data Contributor
+  resource_group_name = local.infra.resource_group_name
+  account_name        = local.infra.cosmos_db_account_name
+  role_definition_id  = "${local.infra.cosmos_db_account_id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002" # Built-in Data Contributor
   principal_id        = azurerm_container_app.workout_api.identity[0].principal_id
-  scope               = var.cosmos_db_account_id
+  scope               = local.infra.cosmos_db_account_id
 }
 
 # Grant Container App managed identity read access to Azure App Configuration
 resource "azurerm_role_assignment" "container_app_appconfig_reader" {
-  scope                = var.azure_app_config_resource_id
+  scope                = local.infra.azure_app_config_resource_id
   role_definition_name = "App Configuration Data Reader"
   principal_id         = azurerm_container_app.workout_api.identity[0].principal_id
 }
@@ -100,8 +100,8 @@ resource "azurerm_role_assignment" "container_app_appconfig_reader" {
 # 1. The Verification Record (Proves to Azure you own the domain)
 resource "azurerm_dns_txt_record" "workout_api_verification" {
   name                = "asuid.${local.back_app_dns_name}"
-  zone_name           = var.dns_zone_name
-  resource_group_name = var.resource_group_name
+  zone_name           = local.infra.dns_zone_name
+  resource_group_name = local.infra.resource_group_name
   ttl                 = 3600
 
   record {
@@ -112,15 +112,15 @@ resource "azurerm_dns_txt_record" "workout_api_verification" {
 # 2. The Routing Record (Points to the container ingress)
 resource "azurerm_dns_cname_record" "workout_api" {
   name                = local.back_app_dns_name
-  zone_name           = var.dns_zone_name
-  resource_group_name = var.resource_group_name
+  zone_name           = local.infra.dns_zone_name
+  resource_group_name = local.infra.resource_group_name
   ttl                 = 3600
   record              = azurerm_container_app.workout_api.ingress[0].fqdn
 }
 
 # 3. The Custom Domain (Unsecured initially)
 resource "azurerm_container_app_custom_domain" "workout_api" {
-  name             = "${local.back_app_dns_name}.${var.dns_zone_name}"
+  name             = "${local.back_app_dns_name}.${local.infra.dns_zone_name}"
   container_app_id = azurerm_container_app.workout_api.id
 
   # We must completely omit the certificate binding fields and tell Terraform 
@@ -141,7 +141,7 @@ resource "azurerm_container_app_custom_domain" "workout_api" {
 # 4. The Auth0 Resource Server
 resource "auth0_resource_server" "backend_api" {
   name        = "WorkoutTracker Backend API"
-  identifier  = "https://${local.back_app_dns_name}.${var.dns_zone_name}"
+  identifier  = "https://${local.back_app_dns_name}.${local.infra.dns_zone_name}"
   signing_alg = "RS256"
 
   # Allows the frontend to request refresh tokens so users stay logged in

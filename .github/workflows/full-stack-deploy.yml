@@ -1,19 +1,92 @@
-name: Phase 3 - CD Deploy
+name: Deploy
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      commit_sha:
-        required: true
-        type: string
 
 permissions:
   id-token: write
   contents: read
 
+env:
+  STATIC_WEB_APP_NAME: workout-app
+  RESOURCE_GROUP_NAME: workout-rg
+  CONTAINER_APP_NAME: workout-api
+  ACA_ENVIRONMENT_NAME: infra-aca
+  BACKEND_HOSTNAME: workout.api.romaine.life
+  REGISTRY: ghcr.io
+  IMAGE_NAME: nelsong6/kill-me/workout-api
+
 jobs:
-  call-deployment-template:
-    uses: nelsong6/pipeline-templates/.github/workflows/full-stack-deploy-template.yml@main
-    with:
-      target_sha: ${{ inputs.commit_sha }}
-    secrets: inherit
+  deploy-backend:
+    name: Deploy Backend API
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure Login via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
+
+      - name: Deploy to Container App
+        run: |
+          az containerapp update \
+            --name ${{ env.CONTAINER_APP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP_NAME }} \
+            --image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Bind Custom Domain & Generate Certificate
+        run: |
+          az containerapp hostname bind \
+            --hostname ${{ env.BACKEND_HOSTNAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP_NAME }} \
+            --name ${{ env.CONTAINER_APP_NAME }} \
+            --environment ${{ env.ACA_ENVIRONMENT_NAME }} \
+            --validation-method CNAME
+
+  deploy-frontend:
+    name: Deploy Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Azure Login via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.ARM_CLIENT_ID }}
+          tenant-id: ${{ vars.ARM_TENANT_ID }}
+          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
+
+      - name: Build Frontend
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Get Static Web App Token
+        id: swa-token
+        run: |
+          TOKEN=$(az staticwebapp secrets list \
+            --name ${{ env.STATIC_WEB_APP_NAME }} \
+            --resource-group ${{ env.RESOURCE_GROUP_NAME }} \
+            --query "properties.apiKey" -o tsv)
+          echo "::add-mask::$TOKEN"
+          echo "deployment_token=$TOKEN" >> $GITHUB_OUTPUT
+
+      - name: Deploy to Azure Static Web App
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ steps.swa-token.outputs.deployment_token }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: "upload"
+          app_location: "./frontend/dist"
+          output_location: ""
+          skip_app_build: true

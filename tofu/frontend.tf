@@ -18,15 +18,15 @@ locals {
 
 resource "azurerm_dns_cname_record" "workout" {
   name                = local.front_app_dns_name
-  zone_name           = var.dns_zone_name
-  resource_group_name = var.resource_group_name
+  zone_name           = local.infra.dns_zone_name
+  resource_group_name = local.infra.resource_group_name
   ttl                 = 3600
   record              = azurerm_static_web_app.workout.default_host_name
 }
 
 resource "azurerm_static_web_app_custom_domain" "workout" {
   static_web_app_id = azurerm_static_web_app.workout.id
-  domain_name       = "${local.front_app_dns_name}.${var.dns_zone_name}"
+  domain_name       = "${local.front_app_dns_name}.${local.infra.dns_zone_name}"
   validation_type   = "cname-delegation"
   depends_on        = [azurerm_dns_cname_record.workout]
 }
@@ -37,15 +37,15 @@ resource "auth0_client" "frontend_spa" {
   is_first_party = true
   callbacks = [
     "http://localhost:5173",
-    "https://${local.front_app_dns_name}.${var.dns_zone_name}"
+    "https://${local.front_app_dns_name}.${local.infra.dns_zone_name}"
   ]
   allowed_logout_urls = [
     "http://localhost:5173",
-    "https://${local.front_app_dns_name}.${var.dns_zone_name}"
+    "https://${local.front_app_dns_name}.${local.infra.dns_zone_name}"
   ]
   web_origins = [
     "http://localhost:5173",
-    "https://${local.front_app_dns_name}.${var.dns_zone_name}"
+    "https://${local.front_app_dns_name}.${local.infra.dns_zone_name}"
   ]
   jwt_configuration {
     alg = "RS256"
