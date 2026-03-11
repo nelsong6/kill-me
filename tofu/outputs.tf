@@ -15,7 +15,7 @@ output "static_web_app_default_hostname" {
 }
 
 output "cosmos_db_name" {
-  value       = var.cosmos_db_account_name
+  value       = local.infra.cosmos_db_account_name
   description = "Cosmos DB account name"
 }
 
@@ -30,7 +30,7 @@ output "cosmos_db_container_name" {
 }
 
 output "backend_api_url" {
-  value       = "https://${local.back_app_dns_name}.${var.dns_zone_name}"
+  value       = "https://${local.back_app_dns_name}.${local.infra.dns_zone_name}"
   description = "The URL of the backend Container App API"
 }
 
