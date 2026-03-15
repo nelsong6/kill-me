@@ -5,8 +5,7 @@
 // must be logged into Azure CLI (`az login`) for this to work locally.
 
 import { useState } from 'react';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+import { apiFetch } from '../api/client.js';
 
 export function DatabaseInit() {
   const [status, setStatus] = useState('idle'); // idle, initializing, success, error
@@ -19,51 +18,18 @@ export function DatabaseInit() {
     setResult(null);
 
     try {
-      const response = await fetch(`${API_URL}/api/admin/init-database`, {
+      const data = await apiFetch('/api/admin/init-database', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        }
       });
-
-      if (!response.ok) {
-        const contentType = response.headers.get('content-type');
-        let errorData;
-        
-        if (contentType && contentType.includes('application/json')) {
-          errorData = await response.json();
-        } else {
-          const text = await response.text();
-          errorData = { message: text || `HTTP ${response.status}` };
-        }
-        
-        const errorDetails = {
-          status: response.status,
-          statusText: response.statusText,
-          message: errorData.message || errorData.error || 'Unknown error',
-          details: errorData,
-          url: response.url
-        };
-        
-        throw new Error(JSON.stringify(errorDetails));
-      }
-
-      const data = await response.json();
       setStatus('success');
       setResult(data);
     } catch (err) {
       setStatus('error');
-      // Try to parse JSON error details, otherwise use the message
-      try {
-        const errorObj = JSON.parse(err.message);
-        setError(errorObj);
-      } catch {
-        setError({
-          message: err.message,
-          stack: err.stack,
-          name: err.name
-        });
-      }
+      setError({
+        message: err.message,
+        stack: err.stack,
+        name: err.name
+      });
     }
   };
 

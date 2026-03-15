@@ -88,6 +88,9 @@ jobs:
 
       - name: Build Frontend
         working-directory: ./frontend
+        env:
+          VITE_API_URL: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).backend_api_url }}
+          VITE_MICROSOFT_CLIENT_ID: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).microsoft_login_client_id }}
         run: |
           npm ci
           npm run build

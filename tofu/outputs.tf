@@ -39,16 +39,6 @@ output "container_app_name" {
   description = "Name of the backend Container App, picked up by github actions to handle custom dns for container app."
 }
 
-output "auth0_client_id" {
-  value       = auth0_client.frontend_spa.client_id
-  description = "Auth0 SPA client ID for the frontend application"
-}
-
-output "auth0_audience" {
-  value       = auth0_resource_server.backend_api.identifier
-  description = "Auth0 API audience identifier for the backend"
-}
-
 output "container_app_environment_name" {
   value       = data.azurerm_container_app_environment.infra.name
   description = "Name of the shared Container App Environment"
@@ -57,4 +47,9 @@ output "container_app_environment_name" {
 output "app_config_prefix" {
   value       = local.front_app_dns_name
   description = "App Configuration key prefix, derived from the frontend DNS name"
+}
+
+output "microsoft_login_client_id" {
+  value       = azuread_application.microsoft_login.client_id
+  description = "Client ID of the Microsoft sign-in app registration"
 }

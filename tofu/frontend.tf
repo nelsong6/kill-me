@@ -35,31 +35,20 @@ resource "azurerm_static_web_app_custom_domain" "workout" {
   depends_on        = [azurerm_dns_cname_record.workout]
 }
 
-# Auth0 SPA client for the frontend. Callbacks and origins include both localhost
-# (for local dev on Vite's default port) and the production custom domain.
-# Grant types include refresh_token so users stay logged in across sessions.
-resource "auth0_client" "frontend_spa" {
-  name           = "WorkoutTracker Web UI"
-  app_type       = "spa"
-  is_first_party = true
-  callbacks = [
-    "http://localhost:5173",
-    "https://${local.front_app_dns_name}.${local.infra.dns_zone_name}"
-  ]
-  allowed_logout_urls = [
-    "http://localhost:5173",
-    "https://${local.front_app_dns_name}.${local.infra.dns_zone_name}"
-  ]
-  web_origins = [
-    "http://localhost:5173",
-    "https://${local.front_app_dns_name}.${local.infra.dns_zone_name}"
-  ]
-  jwt_configuration {
-    alg = "RS256"
+# User-facing Microsoft sign-in app registration (separate from the CI/CD app reg).
+# Supports personal Microsoft accounts via MSAL.js redirect flow.
+resource "azuread_application" "microsoft_login" {
+  display_name     = "kill-me-microsoft-login"
+  sign_in_audience = "AzureADandPersonalMicrosoftAccount"
+
+  api {
+    requested_access_token_version = 2
   }
-  grant_types = [
-    "authorization_code",
-    "implicit",
-    "refresh_token"
-  ]
+
+  single_page_application {
+    redirect_uris = [
+      "https://${local.front_app_dns_name}.${local.infra.dns_zone_name}/",
+      "http://localhost:5173/",
+    ]
+  }
 }

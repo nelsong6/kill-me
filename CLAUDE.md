@@ -43,29 +43,39 @@ day. Dips are fine on Day 9 (assisted machine at -90 lbs), but never on Day 8.
 
 ```text
 frontend/          React 19 SPA (Vite + Tailwind CSS 4)
-  ├── Auth0 for authentication (SPA flow)
+  ├── Microsoft sign-in via MSAL.js (redirect flow)
+  ├── Public viewing, admin-only editing
   ├── Deployed to Azure Static Web App
   └── Calls backend API with Bearer tokens
 
 backend/           Express.js API (Node 20)
-  ├── Auth0 JWT validation (express-oauth2-jwt-bearer)
+  ├── Self-signed JWT auth (Microsoft ID token exchange)
   ├── Azure Cosmos DB NoSQL for storage
-  ├── Azure App Configuration for runtime config
+  ├── Azure App Configuration + Key Vault for runtime config
   ├── Deployed as Azure Container App
   └── Managed identity for all Azure service access
 
 tofu/              OpenTofu infrastructure-as-code
-  ├── App-specific resources on top of shared infra
-  └── Auth0 provider for client/resource server management
+  └── App-specific resources on top of shared infra
 ```
+
+### Auth model
+
+"Everyone can view, only Nelson can edit." Public visitors see workout history
+and the current day in the cycle. Logging workouts, changing the current day, and
+admin actions require signing in with the whitelisted Microsoft account
+(`nelson-devops-project@outlook.com`).
 
 ### Data flow
 
-1. User authenticates via Auth0 (SPA redirect flow)
-2. Frontend requests Bearer token silently from Auth0
-3. Frontend calls backend API with token in Authorization header
-4. Backend validates JWT, extracts `sub` claim as userId
-5. Backend queries/writes Cosmos DB, partitioned by userId
+1. Anyone can browse — GET endpoints are public (no auth required)
+2. To edit, user signs in with Microsoft via MSAL.js redirect flow
+3. Frontend sends Microsoft ID token to backend `/auth/microsoft/login`
+4. Backend verifies ID token against Microsoft JWKS, assigns admin/viewer role
+5. Backend issues self-signed 7-day JWT; frontend stores it in localStorage
+6. Frontend attaches JWT as Bearer token on write requests
+7. Backend validates JWT, extracts `sub` claim as userId
+8. Backend queries/writes Cosmos DB, partitioned by userId
 
 ### Shared infrastructure
 
@@ -78,8 +88,8 @@ This repo builds on shared resources provisioned by **infra-bootstrap**:
 - Key Vault (`romaine-kv`)
 
 App-specific resources created by this repo: the Cosmos DB database and container,
-the Container App, the Static Web App, Auth0 client and resource server, DNS records,
-and App Configuration keys.
+the Container App, the Static Web App, JWT signing secret in Key Vault, DNS records,
+and Key Vault role assignment.
 
 See also: **pipeline-templates** for reusable GitHub Actions workflows, and
 **shell-config** for the global Claude config chain and DevOps tooling.
@@ -95,6 +105,7 @@ distinguished by a `type` field:
 | `exercise` | Exercise library entries per day | `dayNumber`, `name`, `equipment`, `targetWeight/Reps/Sets` |
 | `logged-workout` | A completed workout session | `userId`, `dayNumber`, `date`, `mode` (quick/detailed), `exercises[]` |
 | `settings` | Per-user settings (current day) | `userId`, `currentDay` |
+| `account` | Microsoft auth account record | `userId`, `provider`, `name`, `email`, `role` |
 
 All document types share the same container and partition key. The `type` field is
 used in queries to distinguish them.
@@ -116,9 +127,8 @@ All workflows delegate to **nelsong6/pipeline-templates** reusable templates:
 ### Prerequisites
 
 - Node 20+
-- Azure CLI (`az login` for local Cosmos DB access)
-- Auth0 tenant configured (domain, client ID, audience)
-- Backend `.env` or Azure App Configuration endpoint
+- Azure CLI (`az login` for local Cosmos DB and Key Vault access)
+- Backend `.env` with `AZURE_APP_CONFIG_ENDPOINT`, `APP_CONFIG_PREFIX`, and `KEY_VAULT_URL`
 
 ### Running locally
 
@@ -128,24 +138,26 @@ cd backend && npm run dev   # Backend only (Express :3000)
 cd frontend && npm run dev  # Frontend only (Vite :5173)
 ```
 
-The frontend reads Auth0 config from `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`,
-`VITE_AUTH0_AUDIENCE`, and `VITE_API_URL` environment variables.
+The frontend reads `VITE_MICROSOFT_CLIENT_ID` and `VITE_API_URL` environment variables.
 
-Admin mode (database init) is available only on localhost in dev mode.
+Admin mode (database init, data migration) is available only on localhost in dev
+mode when signed in as admin.
 
 ### Build number
 
 The frontend displays a git short hash as the build number, injected at build time
 via Vite's `define` config.
 
-## Tech Debt / Cleanup Needed
-
-- **Legacy backend endpoints**: `GET /api/workouts` and `POST /api/workouts/bulk`
-  were used by now-removed components and migration tooling. The canonical endpoints
-  are `/api/logged-workouts` and `/api/log-workout`. Consider removing the legacy
-  routes once confirmed unused.
-
 ## Change Log
+
+### 2026-03-25
+
+- **Switched auth from Auth0 to Microsoft sign-in** — replaced Auth0 SPA flow with MSAL.js redirect flow (Microsoft identity). Backend now verifies Microsoft ID tokens via JWKS and issues self-signed JWTs. Whitelisted email (`nelson-devops-project@outlook.com`) gets admin role; all others get viewer.
+- **Adopted "view/edit" access model** — anyone can browse workout history and today's workout (GET endpoints are public). Only admin can log workouts, change the current day, or access admin tools. Frontend conditionally hides edit UI for non-admin users.
+- **Removed Auth0 infrastructure** — deleted Auth0 provider, SPA client, resource server, and App Config audience key from OpenTofu. Added JWT signing secret to Key Vault and Key Vault access role for the Container App.
+- **Removed legacy endpoints** — deleted `GET /api/workouts`, `POST /api/workouts/bulk`, `GET /api/workouts/day/:dayNumber`, `POST /api/workouts`, `DELETE /api/workouts/:id` (tech debt, no consumers).
+- **Added data migration endpoint** — `POST /api/admin/migrate-data` re-partitions existing documents from the old Auth0 userId to the new Microsoft userId.
+- **Created shared API client** — `frontend/src/api/client.js` with auto Bearer token, 503 retry, and 401 handling. Replaced per-component `getToken` prop drilling.
 
 ### 2026-03-15
 

@@ -14,10 +14,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DAY_CONFIG } from '../utils/dayConfig';
+import { apiFetch } from '../api/client.js';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-
-export function TodayTab({ currentDay, onDayChange, getToken }) {
+export function TodayTab({ currentDay, onDayChange, isAdmin }) {
   const [mode, setMode] = useState('quick'); // 'quick' or 'detailed'
   const [workoutDay, setWorkoutDay] = useState(null);
   const [exercises, setExercises] = useState([]);
@@ -38,29 +37,23 @@ export function TodayTab({ currentDay, onDayChange, getToken }) {
       setLoading(true);
       try {
         // Fetch workout day definition
-        const dayResponse = await fetch(`${API_URL}/api/workout-days/${currentDay}`);
-        if (dayResponse.ok) {
-          const dayData = await dayResponse.json();
-          setWorkoutDay(dayData.workoutDay);
-        }
+        const dayData = await apiFetch(`/api/workout-days/${currentDay}`);
+        setWorkoutDay(dayData.workoutDay);
 
         // Fetch exercises for this day
-        const exercisesResponse = await fetch(`${API_URL}/api/exercises/day/${currentDay}`);
-        if (exercisesResponse.ok) {
-          const exercisesData = await exercisesResponse.json();
-          setExercises(exercisesData.exercises || []);
-          
-          // Initialize completed exercises state
-          setCompletedExercises(
-            exercisesData.exercises.map(ex => ({
-              name: ex.name,
-              completed: false,
-              weight: ex.targetWeight || '',
-              reps: ex.targetReps || '',
-              sets: ex.targetSets || ''
-            }))
-          );
-        }
+        const exercisesData = await apiFetch(`/api/exercises/day/${currentDay}`);
+        setExercises(exercisesData.exercises || []);
+
+        // Initialize completed exercises state
+        setCompletedExercises(
+          (exercisesData.exercises || []).map(ex => ({
+            name: ex.name,
+            completed: false,
+            weight: ex.targetWeight || '',
+            reps: ex.targetReps || '',
+            sets: ex.targetSets || ''
+          }))
+        );
       } catch (error) {
         console.error('Error fetching workout data:', error);
       } finally {
@@ -78,24 +71,16 @@ export function TodayTab({ currentDay, onDayChange, getToken }) {
   const handleQuickLog = async () => {
     setLogging(true);
     try {
-      const token = await getToken();
-      const response = await fetch(`${API_URL}/api/log-workout`, {
+      await apiFetch('/api/log-workout', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
         body: JSON.stringify({
           dayNumber: currentDay,
           dayName: workoutDay?.name || `Day ${currentDay}`,
           mode: 'quick'
         })
       });
-
-      if (response.ok) {
-        setSuccess(true);
-        setTimeout(() => setSuccess(false), 3000);
-      }
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
     } catch (error) {
       console.error('Error logging workout:', error);
     } finally {
@@ -105,7 +90,7 @@ export function TodayTab({ currentDay, onDayChange, getToken }) {
 
   const handleDetailedLog = async () => {
     const completed = completedExercises.filter(ex => ex.completed);
-    
+
     if (completed.length === 0) {
       alert('Please complete at least one exercise');
       return;
@@ -113,13 +98,8 @@ export function TodayTab({ currentDay, onDayChange, getToken }) {
 
     setLogging(true);
     try {
-      const token = await getToken();
-      const response = await fetch(`${API_URL}/api/log-workout`, {
+      await apiFetch('/api/log-workout', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
         body: JSON.stringify({
           dayNumber: currentDay,
           dayName: workoutDay?.name || `Day ${currentDay}`,
@@ -127,21 +107,17 @@ export function TodayTab({ currentDay, onDayChange, getToken }) {
           exercises: completed
         })
       });
-
-      if (response.ok) {
-        setSuccess(true);
-        // Reset form
-        setCompletedExercises(
-          exercises.map(ex => ({
-            name: ex.name,
-            completed: false,
-            weight: ex.targetWeight || '',
-            reps: ex.targetReps || '',
-            sets: ex.targetSets || ''
-          }))
-        );
-        setTimeout(() => setSuccess(false), 3000);
-      }
+      setSuccess(true);
+      setCompletedExercises(
+        exercises.map(ex => ({
+          name: ex.name,
+          completed: false,
+          weight: ex.targetWeight || '',
+          reps: ex.targetReps || '',
+          sets: ex.targetSets || ''
+        }))
+      );
+      setTimeout(() => setSuccess(false), 3000);
     } catch (error) {
       console.error('Error logging workout:', error);
     } finally {
@@ -305,8 +281,8 @@ export function TodayTab({ currentDay, onDayChange, getToken }) {
         </div>
       </div>
 
-      {/* Mode Toggle */}
-      <div className="flex gap-3 bg-slate-800/30 backdrop-blur-md rounded-xl p-2">
+      {/* Mode Toggle — admin only */}
+      {isAdmin && <div className="flex gap-3 bg-slate-800/30 backdrop-blur-md rounded-xl p-2">
         <button
           onClick={() => setMode('quick')}
           className={`flex-1 py-3 rounded-lg font-bold uppercase tracking-wide transition-all ${
@@ -327,10 +303,10 @@ export function TodayTab({ currentDay, onDayChange, getToken }) {
         >
           📋 Detailed Log
         </button>
-      </div>
+      </div>}
 
       {/* Quick Mode */}
-      {mode === 'quick' && (
+      {isAdmin && mode === 'quick' && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -354,7 +330,7 @@ export function TodayTab({ currentDay, onDayChange, getToken }) {
       )}
 
       {/* Detailed Mode */}
-      {mode === 'detailed' && (
+      {isAdmin && mode === 'detailed' && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

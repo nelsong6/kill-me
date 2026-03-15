@@ -7,8 +7,8 @@
 // The day ordering is recovery-sequenced — see CLAUDE.md for the full rationale.
 // Key placement decisions are noted in each day's `focus` field.
 //
-// Historical logged workouts use a hardcoded userId that matches the Auth0 `sub`
-// claim for the primary user account.
+// Historical logged workouts use a hardcoded legacy userId. After deploying the
+// Microsoft auth migration, run /api/admin/migrate-data to re-partition them.
 
 // 12-Day Workout Cycle Definition
 export const workoutDays = [

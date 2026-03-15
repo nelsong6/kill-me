@@ -1,53 +1,62 @@
 import { AppConfigurationClient } from '@azure/app-configuration';
+import { SecretClient } from '@azure/keyvault-secrets';
 import { DefaultAzureCredential } from '@azure/identity';
 
 /**
- * Fetches application configuration from Azure App Configuration.
+ * Fetches application configuration from Azure App Configuration and Key Vault.
  *
- * AZURE_APP_CONFIG_ENDPOINT is infrastructure config (not a secret) and
- * is injected as a plain environment variable on the Container App.
- *
- * @returns {Promise<{ auth0Domain: string, auth0Audience: string, cosmosDbEndpoint: string }>}
+ * Environment variables consumed:
+ *   AZURE_APP_CONFIG_ENDPOINT  – App Configuration endpoint URL
+ *   APP_CONFIG_PREFIX          – key prefix (e.g. "workout")
+ *   KEY_VAULT_URL              – Key Vault endpoint URL
  */
 export async function fetchAppConfig() {
-  const endpoint = process.env.AZURE_APP_CONFIG_ENDPOINT;
-
-  if (!endpoint) {
-    throw new Error(
-      'AZURE_APP_CONFIG_ENDPOINT environment variable is not set. ' +
-      'This must be provided as infra config on the Container App.'
-    );
+  const appConfigEndpoint = process.env.AZURE_APP_CONFIG_ENDPOINT;
+  if (!appConfigEndpoint) {
+    throw new Error('AZURE_APP_CONFIG_ENDPOINT environment variable is not set.');
   }
 
   const prefix = process.env.APP_CONFIG_PREFIX;
-
   if (!prefix) {
-    throw new Error(
-      'APP_CONFIG_PREFIX environment variable is not set. ' +
-      'This must be provided as infra config on the Container App.'
-    );
+    throw new Error('APP_CONFIG_PREFIX environment variable is not set.');
+  }
+
+  const keyVaultUrl = process.env.KEY_VAULT_URL;
+  if (!keyVaultUrl) {
+    throw new Error('KEY_VAULT_URL environment variable is not set.');
   }
 
   const credential = new DefaultAzureCredential();
-  const client = new AppConfigurationClient(endpoint, credential);
+  const appConfigClient = new AppConfigurationClient(appConfigEndpoint, credential);
+  const kvClient = new SecretClient(keyVaultUrl, credential);
 
-  const [domainSetting, audienceSetting, cosmosEndpointSetting] = await Promise.all([
-    client.getConfigurationSetting({ key: 'AUTH0_DOMAIN' }),
-    client.getConfigurationSetting({ key: `${prefix}/AUTH0_AUDIENCE` }),
-    client.getConfigurationSetting({ key: 'cosmos_db_endpoint' }),
-  ]);
+  // App Configuration: shared values
+  const cosmosEndpointSetting = await appConfigClient.getConfigurationSetting({
+    key: 'cosmos_db_endpoint',
+  });
 
-  const auth0Domain = domainSetting.value;
-  const auth0Audience = audienceSetting.value;
-  const cosmosDbEndpoint = cosmosEndpointSetting.value;
+  // Key Vault: per-app secret
+  const jwtSigningSecret = (
+    await kvClient.getSecret('kill-me-jwt-signing-secret')
+  ).value;
 
-  if (!auth0Domain || !auth0Audience || !cosmosDbEndpoint) {
-    throw new Error(
-      `Azure App Configuration is missing required keys. ` +
-      `Ensure AUTH0_DOMAIN, ${prefix}/AUTH0_AUDIENCE, and cosmos_db_endpoint are set in the store.`
-    );
+  // Microsoft OAuth client ID comes from a Container App env var (set by tofu),
+  // not from App Config — kill-me owns its own app registration.
+  const microsoftClientId = process.env.MICROSOFT_CLIENT_ID;
+
+  const config = {
+    cosmosDbEndpoint: cosmosEndpointSetting.value,
+    jwtSigningSecret,
+    microsoftClientId,
+  };
+
+  const required = ['cosmosDbEndpoint', 'jwtSigningSecret', 'microsoftClientId'];
+  for (const key of required) {
+    if (!config[key]) {
+      throw new Error(`Configuration value "${key}" is missing or empty.`);
+    }
   }
 
   console.log('[appConfig] Application config fetched from Azure App Configuration');
-  return { auth0Domain, auth0Audience, cosmosDbEndpoint };
+  return config;
 }

@@ -1,18 +1,38 @@
-import { auth } from 'express-oauth2-jwt-bearer';
+import jwt from 'jsonwebtoken';
 
 /**
- * Creates the Auth0 JWT validation middleware.
- *
- * Must be called after Azure App Configuration values are fetched,
- * because auth() is a synchronous factory that reads its arguments immediately.
- *
- * @param {{ auth0Domain: string, auth0Audience: string }} config
- * @returns {import('express').RequestHandler}
+ * Creates Express middleware that verifies self-signed JWTs.
+ * Populates `req.user` with `{ sub, email, name, role }`.
  */
-export function createRequireAuth({ auth0Domain, auth0Audience }) {
-  return auth({
-    audience: auth0Audience,
-    issuerBaseURL: `https://${auth0Domain}/`,
-    tokenSigningAlg: 'RS256',
-  });
+export function createRequireAuth({ jwtSecret }) {
+  return (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Missing or malformed Authorization header' });
+    }
+
+    try {
+      const payload = jwt.verify(authHeader.slice(7), jwtSecret);
+      req.user = {
+        sub: payload.sub,
+        email: payload.email,
+        name: payload.name,
+        role: payload.role || 'member',
+      };
+      next();
+    } catch {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+  };
+}
+
+/**
+ * Middleware that requires the authenticated user to have the 'admin' role.
+ * Must be used after requireAuth.
+ */
+export function requireAdmin(req, res, next) {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Admin only' });
+  }
+  next();
 }

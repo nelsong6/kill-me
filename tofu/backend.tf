@@ -3,19 +3,15 @@
 # ============================================================================
 #
 # The backend runs as a Container App with a system-assigned managed identity.
-# This identity gets three role assignments:
+# This identity gets role assignments for:
 #   1. Cosmos DB Data Contributor (read/write workout data)
-#   2. App Configuration Data Reader (fetch Auth0 config at startup)
-#   3. Implicitly, the Container App Environment's networking
+#   2. App Configuration Data Reader (fetch Microsoft OAuth config at startup)
+#   3. Key Vault Secrets User (fetch JWT signing secret)
 #
 # Custom domain setup follows Azure's three-step dance:
 #   1. TXT record for domain ownership verification
 #   2. CNAME record pointing to the container ingress FQDN
 #   3. Custom domain resource (cert binding managed outside Terraform via lifecycle ignore)
-#
-# The Auth0 resource server is created here (not in frontend.tf) because it
-# represents the backend API's identity in Auth0. The audience URL matches the
-# custom domain so tokens are scoped to this specific API.
 
 locals {
   back_app_dns_name = "${local.front_app_dns_name}.api"
@@ -57,7 +53,15 @@ resource "azurerm_container_app" "workout_api" {
         value = local.front_app_dns_name
       }
 
-      # Frontend URL will be set via environment variable or app config
+      env {
+        name  = "KEY_VAULT_URL"
+        value = "https://${data.azurerm_key_vault.main.name}.vault.azure.net"
+      }
+
+      env {
+        name  = "MICROSOFT_CLIENT_ID"
+        value = azuread_application.microsoft_login.client_id
+      }
     }
 
     min_replicas = 0 # Scale to zero when not in use
@@ -112,6 +116,13 @@ resource "azurerm_role_assignment" "container_app_appconfig_reader" {
   principal_id         = azurerm_container_app.workout_api.identity[0].principal_id
 }
 
+# Grant Container App managed identity access to Key Vault secrets (JWT signing secret)
+resource "azurerm_role_assignment" "container_app_keyvault_reader" {
+  scope                = data.azurerm_key_vault.main.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_container_app.workout_api.identity[0].principal_id
+}
+
 # 1. The Verification Record (Proves to Azure you own the domain)
 resource "azurerm_dns_txt_record" "workout_api_verification" {
   name                = "asuid.${local.back_app_dns_name}"
@@ -151,18 +162,4 @@ resource "azurerm_container_app_custom_domain" "workout_api" {
     azurerm_dns_txt_record.workout_api_verification,
     azurerm_dns_cname_record.workout_api
   ]
-}
-
-# 4. The Auth0 Resource Server
-resource "auth0_resource_server" "backend_api" {
-  name        = "WorkoutTracker Backend API"
-  identifier  = "https://${local.back_app_dns_name}.${local.infra.dns_zone_name}"
-  signing_alg = "RS256"
-
-  # Allows the frontend to request refresh tokens so users stay logged in
-  allow_offline_access = true
-
-  # Prevents the "WorkoutTracker is requesting access to your account" 
-  # prompt since you own both the frontend and backend.
-  skip_consent_for_verifiable_first_party_clients = true
 }

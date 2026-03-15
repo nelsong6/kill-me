@@ -2,9 +2,8 @@
 # infra-bootstrap as a shared resource across all apps).
 #
 # Single container partitioned by /userId — all document types (workout-day-definition,
-# exercise, logged-workout, settings) share this container. The partition key means
-# each user's data is co-located for efficient queries, and cross-user access is
-# naturally isolated by the backend's Auth0 JWT sub claim filtering.
+# exercise, logged-workout, settings, account) share this container. The partition key
+# means each user's data is co-located for efficient queries.
 resource "azurerm_cosmosdb_sql_database" "workout" {
   name                = "WorkoutTrackerDB"
   resource_group_name = local.infra.resource_group_name

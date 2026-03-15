@@ -1,13 +1,17 @@
 // Express API server for the Synergy 12 workout tracker.
 //
-// Startup is async because Auth0 config and Cosmos DB credentials come from
-// Azure App Configuration (fetched at runtime via managed identity). The server
-// cannot register auth-protected routes until those values are available, so all
+// Startup is async because config comes from Azure App Configuration and
+// Key Vault (fetched at runtime via managed identity). The server cannot
+// register auth-protected routes until those values are available, so all
 // route registration happens inside startServer() after config is resolved.
 //
 // All data lives in a single Cosmos DB container partitioned by /userId.
-// Document types (workout-day-definition, exercise, logged-workout, settings)
-// share the container and are distinguished by a `type` field in queries.
+// Document types (workout-day-definition, exercise, logged-workout, settings,
+// account) share the container and are distinguished by a `type` field in queries.
+//
+// Auth model: Microsoft sign-in via MSAL.js. Anyone can view (GET endpoints
+// are public). Only the whitelisted admin email can write (POST/PUT/DELETE
+// endpoints require auth + admin role).
 
 import 'dotenv/config';
 import express from 'express';
@@ -16,29 +20,29 @@ import morgan from 'morgan';
 import { CosmosClient } from '@azure/cosmos';
 import { DefaultAzureCredential } from '@azure/identity';
 import { workoutDays, loggedWorkouts, exercises } from './seed-data.js';
-import { createRequireAuth } from './middleware/auth.js';
+import { createRequireAuth, requireAdmin } from './middleware/auth.js';
+import { createMicrosoftRoutes } from './auth/microsoft-routes.js';
 import { fetchAppConfig } from './startup/appConfig.js';
+
+// Legacy userId from the previous auth provider. After running the migrate-data
+// endpoint, all documents will be re-partitioned under the new Microsoft userId.
+const LEGACY_USER_ID = 'cf57d57d-1411-4f59-b517-e9a8600b140a';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Helmet and other sync middleware register before async startup — they don't
-// depend on App Configuration values.
 app.use(helmet());
-
 app.use(express.json());
 app.use(morgan('combined'));
 
 async function startServer() {
-  // Step 1: Fetch AUTH0_DOMAIN and AUTH0_AUDIENCE from Azure App Configuration.
-  // This must happen before createRequireAuth() is called.
-  const { auth0Domain, auth0Audience, cosmosDbEndpoint } = await fetchAppConfig();
+  // Step 1: Fetch config from Azure App Configuration and Key Vault.
+  const { cosmosDbEndpoint, jwtSigningSecret, microsoftClientId } = await fetchAppConfig();
 
-  // Step 2: Build the Auth0 JWT middleware now that we have the values.
-  const requireAuth = createRequireAuth({ auth0Domain, auth0Audience });
+  // Step 2: Build auth middleware with the JWT signing secret.
+  const requireAuth = createRequireAuth({ jwtSecret: jwtSigningSecret });
 
   // Step 3: Initialize Cosmos DB client.
-  const COSMOS_ENDPOINT = cosmosDbEndpoint;
   const DATABASE_NAME = process.env.COSMOS_DB_DATABASE_NAME || 'WorkoutTrackerDB';
   const CONTAINER_NAME = process.env.COSMOS_DB_CONTAINER_NAME || 'workouts';
 
@@ -46,22 +50,25 @@ async function startServer() {
   try {
     const credential = new DefaultAzureCredential();
     const client = new CosmosClient({
-      endpoint: COSMOS_ENDPOINT,
+      endpoint: cosmosDbEndpoint,
       aadCredentials: credential
     });
 
     const database = client.database(DATABASE_NAME);
     container = database.container(CONTAINER_NAME);
-    console.log('✅ Connected to Cosmos DB using Azure Identity');
+    console.log('Connected to Cosmos DB using Azure Identity');
   } catch (error) {
-    console.error('❌ Failed to connect to Cosmos DB:', error);
+    console.error('Failed to connect to Cosmos DB:', error);
     process.exit(1);
   }
 
-  // Step 4: Register all routes.
-  // requireAuth and container are in scope via closure.
+  // Step 4: Mount Microsoft auth routes.
+  app.use(createMicrosoftRoutes({ jwtSecret: jwtSigningSecret, microsoftClientId, container }));
 
-  // Health check endpoint
+  // Step 5: Register all routes.
+
+  // --- Public endpoints (no auth required) ---
+
   app.get('/health', (req, res) => {
     res.json({
       status: 'healthy',
@@ -69,112 +76,6 @@ async function startServer() {
       database: DATABASE_NAME,
       container: CONTAINER_NAME
     });
-  });
-
-  // Database initialization endpoint (admin only).
-  // Creates the Cosmos DB database and container if they don't exist, then seeds
-  // the 12-day cycle definitions, historical workout logs, and exercise library
-  // from seed-data.js. Idempotent — uses upsert so re-running is safe.
-  // Only accessible from the admin panel (localhost dev mode).
-  app.post('/api/admin/init-database', requireAuth, async (req, res) => {
-    try {
-      const credential = new DefaultAzureCredential();
-      const client = new CosmosClient({
-        endpoint: COSMOS_ENDPOINT,
-        aadCredentials: credential
-      });
-
-      // Create database if it doesn't exist
-      const { database } = await client.databases.createIfNotExists({
-        id: DATABASE_NAME
-      });
-
-      // Create container if it doesn't exist
-      const { container: newContainer } = await database.containers.createIfNotExists({
-        id: CONTAINER_NAME,
-        partitionKey: {
-          paths: ['/userId']
-        }
-      });
-
-      // Seed data
-      const seededData = {
-        workoutDays: 0,
-        loggedWorkouts: 0,
-        exercises: 0
-      };
-
-      // Seed workout day definitions
-      for (const day of workoutDays) {
-        try {
-          const dayDoc = {
-            id: `workout-day-${day.dayNumber}`,
-            type: 'workout-day-definition',
-            ...day,
-            createdAt: new Date().toISOString()
-          };
-          await newContainer.items.upsert(dayDoc);
-          seededData.workoutDays++;
-        } catch (err) {
-          console.error(`Failed to seed workout day ${day.dayNumber}:`, err.message);
-        }
-      }
-
-      // Seed logged workouts (historical data)
-      for (const workout of loggedWorkouts) {
-        try {
-          const workoutDoc = {
-            id: `logged-workout-${workout.date}-day${workout.dayNumber}`,
-            type: 'logged-workout',
-            userId: workout.userId,
-            dayNumber: workout.dayNumber,
-            dayName: workout.dayName,
-            date: workout.date,
-            timestamp: new Date(workout.date).toISOString(),
-            createdAt: new Date().toISOString()
-          };
-          await newContainer.items.upsert(workoutDoc);
-          seededData.loggedWorkouts++;
-        } catch (err) {
-          console.error(`Failed to seed logged workout for ${workout.date}:`, err.message);
-        }
-      }
-
-      // Seed exercise library
-      for (const exercise of exercises) {
-        try {
-          const exerciseDoc = {
-            id: `exercise-${exercise.dayNumber}-${exercise.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
-            type: 'exercise',
-            ...exercise,
-            createdAt: new Date().toISOString()
-          };
-          await newContainer.items.upsert(exerciseDoc);
-          seededData.exercises++;
-        } catch (err) {
-          console.error(`Failed to seed exercise ${exercise.name}:`, err.message);
-        }
-      }
-
-      res.json({
-        success: true,
-        message: 'Database initialized and seeded successfully',
-        database: DATABASE_NAME,
-        container: CONTAINER_NAME,
-        created: {
-          database: database ? true : false,
-          container: newContainer ? true : false
-        },
-        seeded: seededData
-      });
-    } catch (error) {
-      console.error('Error initializing database:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to initialize database',
-        message: error.message
-      });
-    }
   });
 
   // Get workout day definition by day number
@@ -233,16 +134,14 @@ async function startServer() {
     }
   });
 
-  // Get logged workouts for a user
-  app.get('/api/logged-workouts', requireAuth, async (req, res) => {
+  // Get all logged workouts (public — Nelson is the only user).
+  // Cross-partition query by type; returns all workouts regardless of userId.
+  app.get('/api/logged-workouts', async (req, res) => {
     try {
-      const userId = req.auth.payload.sub;
-
       const querySpec = {
-        query: 'SELECT * FROM c WHERE c.type = @type AND c.userId = @userId ORDER BY c.date DESC',
+        query: 'SELECT * FROM c WHERE c.type = @type ORDER BY c.date DESC',
         parameters: [
-          { name: '@type', value: 'logged-workout' },
-          { name: '@userId', value: userId }
+          { name: '@type', value: 'logged-workout' }
         ]
       };
 
@@ -255,20 +154,42 @@ async function startServer() {
     }
   });
 
+  // Get current day in the 12-day cycle (public).
+  // Cross-partition query by type; defaults to day 1 if no settings exist.
+  app.get('/api/current-day', async (req, res) => {
+    try {
+      const querySpec = {
+        query: 'SELECT * FROM c WHERE c.type = @type',
+        parameters: [
+          { name: '@type', value: 'settings' }
+        ]
+      };
+
+      const { resources: settings } = await container.items.query(querySpec).fetchAll();
+
+      const currentDay = settings[0]?.currentDay || 1;
+      res.json({ currentDay });
+    } catch (error) {
+      console.error('Error fetching current day:', error);
+      res.status(500).json({ error: 'Failed to fetch current day', message: error.message });
+    }
+  });
+
+  // --- Admin endpoints (auth + admin role required) ---
+
   // Log a completed workout. Supports two modes:
   // - "quick": just records that the day was done (no exercise details)
   // - "detailed": includes per-exercise weight/reps/sets data
-  // The id includes a timestamp suffix to allow multiple logs per day.
-  app.post('/api/log-workout', requireAuth, async (req, res) => {
+  app.post('/api/log-workout', requireAuth, requireAdmin, async (req, res) => {
     try {
-      const userId = req.auth.payload.sub;
+      const userId = req.user.sub;
       const { dayNumber, dayName, mode, exercises: completedExercises } = req.body;
 
       if (!dayNumber) {
         return res.status(400).json({ error: 'Missing required field: dayNumber' });
       }
 
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const today = new Date().toISOString().split('T')[0];
 
       const workoutDoc = {
         id: `logged-workout-${today}-day${dayNumber}-${Date.now()}`,
@@ -277,7 +198,7 @@ async function startServer() {
         dayNumber,
         dayName,
         date: today,
-        mode: mode || 'quick', // 'quick' or 'detailed'
+        mode: mode || 'quick',
         exercises: completedExercises || [],
         timestamp: new Date().toISOString(),
         createdAt: new Date().toISOString()
@@ -292,201 +213,16 @@ async function startServer() {
     }
   });
 
-  // Legacy endpoint — returns logged workouts in the old format expected by
-  // WorkoutHistory.jsx (which is now dead code). Kept for backward compat but
-  // /api/logged-workouts is the canonical endpoint.
-  app.get('/api/workouts', requireAuth, async (req, res) => {
+  // Update current day in the 12-day cycle
+  app.put('/api/current-day', requireAuth, requireAdmin, async (req, res) => {
     try {
-      const userId = req.auth.payload.sub;
-
-      const querySpec = {
-        query: 'SELECT * FROM c WHERE c.type = @type AND c.userId = @userId ORDER BY c.date DESC',
-        parameters: [
-          { name: '@type', value: 'logged-workout' },
-          { name: '@userId', value: userId }
-        ]
-      };
-
-      const { resources: loggedWorkouts } = await container.items
-        .query(querySpec)
-        .fetchAll();
-
-      // Transform to old format for compatibility
-      const workouts = loggedWorkouts.map(lw => ({
-        id: lw.id,
-        day: lw.dayNumber,
-        dayName: lw.dayName,
-        date: lw.timestamp || lw.date,
-        exercises: lw.exercises || []
-      }));
-
-      res.json({ workouts });
-    } catch (error) {
-      console.error('Error fetching workouts:', error);
-      res.status(500).json({ error: 'Failed to fetch workouts', message: error.message });
-    }
-  });
-
-  // Get workouts by day
-  app.get('/api/workouts/day/:dayNumber', requireAuth, async (req, res) => {
-    try {
-      const userId = req.auth.payload.sub;
-      const dayNumber = parseInt(req.params.dayNumber);
-
-      if (isNaN(dayNumber) || dayNumber < 1 || dayNumber > 12) {
-        return res.status(400).json({ error: 'Invalid day number. Must be between 1 and 12.' });
-      }
-
-      const querySpec = {
-        query: 'SELECT * FROM c WHERE c.userId = @userId AND c.dayNumber = @dayNumber ORDER BY c.timestamp DESC',
-        parameters: [
-          { name: '@userId', value: userId },
-          { name: '@dayNumber', value: dayNumber }
-        ]
-      };
-
-      const { resources: workouts } = await container.items
-        .query(querySpec)
-        .fetchAll();
-
-      res.json({ workouts });
-    } catch (error) {
-      console.error('Error fetching workouts by day:', error);
-      res.status(500).json({ error: 'Failed to fetch workouts', message: error.message });
-    }
-  });
-
-  // Create a new workout
-  app.post('/api/workouts', requireAuth, async (req, res) => {
-    try {
-      const userId = req.auth.payload.sub;
-      const workout = req.body;
-
-      // Validate required fields
-      if (!workout.dayNumber || !workout.exercise) {
-        return res.status(400).json({ error: 'Missing required fields: dayNumber and exercise' });
-      }
-
-      // Prepare workout document
-      const workoutDoc = {
-        id: crypto.randomUUID(),
-        userId,
-        ...workout,
-        timestamp: workout.timestamp || new Date().toISOString(),
-        createdAt: new Date().toISOString()
-      };
-
-      const { resource: createdWorkout } = await container.items.create(workoutDoc);
-
-      res.status(201).json({ workout: createdWorkout });
-    } catch (error) {
-      console.error('Error creating workout:', error);
-      res.status(500).json({ error: 'Failed to create workout', message: error.message });
-    }
-  });
-
-  // Bulk import workouts — used by the LocalStorage migration utility
-  // (frontend/src/utils/migration.js) to move dev data to Cosmos DB.
-  // Not a production feature; exists for dev convenience.
-  app.post('/api/workouts/bulk', requireAuth, async (req, res) => {
-    try {
-      const userId = req.auth.payload.sub;
-      const { workouts } = req.body;
-
-      if (!Array.isArray(workouts)) {
-        return res.status(400).json({ error: 'Request body must contain an array of workouts' });
-      }
-
-      const results = [];
-      const errors = [];
-
-      for (const workout of workouts) {
-        try {
-          const workoutDoc = {
-            id: workout.id || crypto.randomUUID(),
-            userId,
-            ...workout,
-            timestamp: workout.timestamp || new Date().toISOString(),
-            createdAt: new Date().toISOString()
-          };
-
-          const { resource } = await container.items.create(workoutDoc);
-          results.push(resource);
-        } catch (error) {
-          errors.push({ workout, error: error.message });
-        }
-      }
-
-      res.status(201).json({
-        success: results.length,
-        failed: errors.length,
-        workouts: results,
-        errors: errors.length > 0 ? errors : undefined
-      });
-    } catch (error) {
-      console.error('Error bulk importing workouts:', error);
-      res.status(500).json({ error: 'Failed to import workouts', message: error.message });
-    }
-  });
-
-  // Delete a workout
-  app.delete('/api/workouts/:id', requireAuth, async (req, res) => {
-    try {
-      const userId = req.auth.payload.sub;
-      const workoutId = req.params.id;
-
-      // Delete the workout
-      await container.item(workoutId, userId).delete();
-
-      res.json({ message: 'Workout deleted successfully', id: workoutId });
-    } catch (error) {
-      if (error.code === 404) {
-        return res.status(404).json({ error: 'Workout not found' });
-      }
-      console.error('Error deleting workout:', error);
-      res.status(500).json({ error: 'Failed to delete workout', message: error.message });
-    }
-  });
-
-  // Get the user's current position in the 12-day cycle.
-  // Stored as a `settings` document in Cosmos DB, partitioned by userId.
-  // Defaults to day 1 if no settings document exists yet.
-  app.get('/api/current-day', requireAuth, async (req, res) => {
-    try {
-      const userId = req.auth.payload.sub;
-
-      // Query for user settings document
-      const querySpec = {
-        query: 'SELECT * FROM c WHERE c.userId = @userId AND c.type = @type',
-        parameters: [
-          { name: '@userId', value: userId },
-          { name: '@type', value: 'settings' }
-        ]
-      };
-
-      const { resources: settings } = await container.items
-        .query(querySpec)
-        .fetchAll();
-
-      const currentDay = settings[0]?.currentDay || 1;
-      res.json({ currentDay });
-    } catch (error) {
-      console.error('Error fetching current day:', error);
-      res.status(500).json({ error: 'Failed to fetch current day', message: error.message });
-    }
-  });
-
-  // Update current day
-  app.put('/api/current-day', requireAuth, async (req, res) => {
-    try {
-      const userId = req.auth.payload.sub;
+      const userId = req.user.sub;
       const { currentDay } = req.body;
 
       if (!currentDay || currentDay < 1 || currentDay > 12) {
         return res.status(400).json({ error: 'Invalid day number. Must be between 1 and 12.' });
       }
 
-      // Upsert user settings
       const settingsDoc = {
         id: `settings_${userId}`,
         userId,
@@ -503,6 +239,153 @@ async function startServer() {
     }
   });
 
+  // Database initialization endpoint (admin only).
+  // Seeds the 12-day cycle definitions, historical workout logs, and exercise
+  // library from seed-data.js. Idempotent — uses upsert so re-running is safe.
+  app.post('/api/admin/init-database', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const credential = new DefaultAzureCredential();
+      const client = new CosmosClient({
+        endpoint: cosmosDbEndpoint,
+        aadCredentials: credential
+      });
+
+      const { database } = await client.databases.createIfNotExists({
+        id: DATABASE_NAME
+      });
+
+      const { container: newContainer } = await database.containers.createIfNotExists({
+        id: CONTAINER_NAME,
+        partitionKey: {
+          paths: ['/userId']
+        }
+      });
+
+      const seededData = {
+        workoutDays: 0,
+        loggedWorkouts: 0,
+        exercises: 0
+      };
+
+      for (const day of workoutDays) {
+        try {
+          const dayDoc = {
+            id: `workout-day-${day.dayNumber}`,
+            type: 'workout-day-definition',
+            ...day,
+            createdAt: new Date().toISOString()
+          };
+          await newContainer.items.upsert(dayDoc);
+          seededData.workoutDays++;
+        } catch (err) {
+          console.error(`Failed to seed workout day ${day.dayNumber}:`, err.message);
+        }
+      }
+
+      for (const workout of loggedWorkouts) {
+        try {
+          const workoutDoc = {
+            id: `logged-workout-${workout.date}-day${workout.dayNumber}`,
+            type: 'logged-workout',
+            userId: workout.userId,
+            dayNumber: workout.dayNumber,
+            dayName: workout.dayName,
+            date: workout.date,
+            timestamp: new Date(workout.date).toISOString(),
+            createdAt: new Date().toISOString()
+          };
+          await newContainer.items.upsert(workoutDoc);
+          seededData.loggedWorkouts++;
+        } catch (err) {
+          console.error(`Failed to seed logged workout for ${workout.date}:`, err.message);
+        }
+      }
+
+      for (const exercise of exercises) {
+        try {
+          const exerciseDoc = {
+            id: `exercise-${exercise.dayNumber}-${exercise.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+            type: 'exercise',
+            ...exercise,
+            createdAt: new Date().toISOString()
+          };
+          await newContainer.items.upsert(exerciseDoc);
+          seededData.exercises++;
+        } catch (err) {
+          console.error(`Failed to seed exercise ${exercise.name}:`, err.message);
+        }
+      }
+
+      res.json({
+        success: true,
+        message: 'Database initialized and seeded successfully',
+        database: DATABASE_NAME,
+        container: CONTAINER_NAME,
+        seeded: seededData
+      });
+    } catch (error) {
+      console.error('Error initializing database:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to initialize database',
+        message: error.message
+      });
+    }
+  });
+
+  // Data migration endpoint (admin only).
+  // Re-partitions all documents from the legacy userId to the authenticated
+  // user's new Microsoft userId. Deletes the old documents after re-creating them.
+  app.post('/api/admin/migrate-data', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const newUserId = req.user.sub;
+
+      // Find all documents under the old userId
+      const querySpec = {
+        query: 'SELECT * FROM c WHERE c.userId = @userId',
+        parameters: [
+          { name: '@userId', value: LEGACY_USER_ID }
+        ]
+      };
+
+      const { resources: oldDocs } = await container.items
+        .query(querySpec, { partitionKey: LEGACY_USER_ID })
+        .fetchAll();
+
+      let migrated = 0;
+      const errors = [];
+
+      for (const doc of oldDocs) {
+        try {
+          // Create new document with updated userId
+          const { _rid, _self, _etag, _attachments, _ts, ...cleanDoc } = doc;
+          const newDoc = { ...cleanDoc, userId: newUserId };
+
+          // For settings docs, update the id to match the new userId
+          if (doc.type === 'settings') {
+            newDoc.id = `settings_${newUserId}`;
+          }
+
+          await container.items.upsert(newDoc);
+          await container.item(doc.id, LEGACY_USER_ID).delete();
+          migrated++;
+        } catch (err) {
+          errors.push({ id: doc.id, error: err.message });
+        }
+      }
+
+      res.json({
+        success: true,
+        migrated,
+        errors: errors.length > 0 ? errors : undefined,
+        message: `Migrated ${migrated} documents from legacy userId to ${newUserId}`
+      });
+    } catch (error) {
+      console.error('Error migrating data:', error);
+      res.status(500).json({ error: 'Failed to migrate data', message: error.message });
+    }
+  });
+
   // 404 handler
   app.use((req, res) => {
     res.status(404).json({ error: 'Not found' });
@@ -514,18 +397,17 @@ async function startServer() {
     res.status(500).json({ error: 'Internal server error', message: err.message });
   });
 
-  // Step 5: Start listening only after all setup is complete.
+  // Step 6: Start listening only after all setup is complete.
   app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`📊 Database: ${DATABASE_NAME}`);
-    console.log(`📦 Container: ${CONTAINER_NAME}`);
-    console.log(`🔒 Auth0 domain: ${auth0Domain}`);
-    console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+    console.log(`Server running on port ${PORT}`);
+    console.log(`Database: ${DATABASE_NAME}`);
+    console.log(`Container: ${CONTAINER_NAME}`);
+    console.log(`Health check: http://localhost:${PORT}/health`);
   });
 }
 
 startServer().catch((error) => {
-  console.error('❌ Fatal startup error:', error);
+  console.error('Fatal startup error:', error);
   process.exit(1);
 });
 

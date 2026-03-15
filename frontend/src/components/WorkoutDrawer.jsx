@@ -16,10 +16,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getDayInfo, DAY_CONFIG } from '../utils/dayConfig';
+import { apiFetch } from '../api/client.js';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-
-export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate = null, onSuccess, onOpenDrawer, currentDay = 1, getToken }) {
+export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate = null, onSuccess, onOpenDrawer, currentDay = 1 }) {
   const [selectedDay, setSelectedDay] = useState(initialDay || currentDay);
   const [selectedDate, setSelectedDate] = useState(initialDate || new Date().toISOString().split('T')[0]);
   const [mode, setMode] = useState('quick'); // 'quick' or 'detailed'
@@ -102,22 +101,18 @@ export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate 
   const fetchExercises = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/exercises/day/${selectedDay}`);
-      if (response.ok) {
-        const data = await response.json();
-        setExercises(data.exercises || []);
-        
-        // Initialize completed exercises state
-        setCompletedExercises(
-          (data.exercises || []).map(ex => ({
-            name: ex.name,
-            completed: false,
-            weight: ex.targetWeight || '',
-            reps: ex.targetReps || '',
-            sets: ex.targetSets || ''
-          }))
-        );
-      }
+      const data = await apiFetch(`/api/exercises/day/${selectedDay}`);
+      setExercises(data.exercises || []);
+
+      setCompletedExercises(
+        (data.exercises || []).map(ex => ({
+          name: ex.name,
+          completed: false,
+          weight: ex.targetWeight || '',
+          reps: ex.targetReps || '',
+          sets: ex.targetSets || ''
+        }))
+      );
     } catch (error) {
       console.error('Error fetching exercises:', error);
     } finally {
@@ -128,13 +123,8 @@ export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate 
   const handleQuickLog = async () => {
     setLogging(true);
     try {
-      const token = await getToken();
-      const response = await fetch(`${API_URL}/api/log-workout`, {
+      await apiFetch('/api/log-workout', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
         body: JSON.stringify({
           dayNumber: selectedDay,
           dayName: dayInfo?.name || `Day ${selectedDay}`,
@@ -142,11 +132,8 @@ export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate 
           date: selectedDate
         })
       });
-
-      if (response.ok) {
-        onSuccess?.();
-        onClose();
-      }
+      onSuccess?.();
+      onClose();
     } catch (error) {
       console.error('Error logging workout:', error);
       alert('Failed to log workout. Please try again.');
@@ -157,7 +144,7 @@ export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate 
 
   const handleDetailedLog = async () => {
     const completed = completedExercises.filter(ex => ex.completed);
-    
+
     if (completed.length === 0) {
       alert('Please complete at least one exercise');
       return;
@@ -165,13 +152,8 @@ export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate 
 
     setLogging(true);
     try {
-      const token = await getToken();
-      const response = await fetch(`${API_URL}/api/log-workout`, {
+      await apiFetch('/api/log-workout', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
         body: JSON.stringify({
           dayNumber: selectedDay,
           dayName: dayInfo?.name || `Day ${selectedDay}`,
@@ -180,11 +162,8 @@ export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate 
           date: selectedDate
         })
       });
-
-      if (response.ok) {
-        onSuccess?.();
-        onClose();
-      }
+      onSuccess?.();
+      onClose();
     } catch (error) {
       console.error('Error logging workout:', error);
       alert('Failed to log workout. Please try again.');

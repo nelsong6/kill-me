@@ -14,10 +14,9 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { DAY_CONFIG } from '../utils/dayConfig';
+import { apiFetch } from '../api/client.js';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-
-export function HistoryTab({ onDayClick, getToken }) {
+export function HistoryTab({ onDayClick }) {
   const [view, setView] = useState('calendar'); // 'calendar' or 'list'
   const [calendarPeriod, setCalendarPeriod] = useState('month'); // 'week', 'month', or 'year'
   const [workouts, setWorkouts] = useState([]);
@@ -37,17 +36,8 @@ export function HistoryTab({ onDayClick, getToken }) {
   const fetchWorkouts = async () => {
     setLoading(true);
     try {
-      const token = await getToken();
-      const response = await fetch(`${API_URL}/api/logged-workouts`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setWorkouts(data.workouts || []);
-      }
+      const data = await apiFetch('/api/logged-workouts');
+      setWorkouts(data.workouts || []);
     } catch (error) {
       console.error('Error fetching workouts:', error);
     } finally {
