@@ -116,13 +116,6 @@ resource "azurerm_role_assignment" "container_app_appconfig_reader" {
   principal_id         = azurerm_container_app.workout_api.identity[0].principal_id
 }
 
-# Grant Container App managed identity access to Key Vault secrets (JWT signing secret)
-resource "azurerm_role_assignment" "container_app_keyvault_reader" {
-  scope                = data.azurerm_key_vault.main.id
-  role_definition_name = "Key Vault Secrets User"
-  principal_id         = azurerm_container_app.workout_api.identity[0].principal_id
-}
-
 # 1. The Verification Record (Proves to Azure you own the domain)
 resource "azurerm_dns_txt_record" "workout_api_verification" {
   name                = "asuid.${local.back_app_dns_name}"
