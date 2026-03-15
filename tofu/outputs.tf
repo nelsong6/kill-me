@@ -15,7 +15,7 @@ output "static_web_app_default_hostname" {
 }
 
 output "cosmos_db_name" {
-  value       = local.infra.cosmos_db_account_name
+  value       = data.azurerm_cosmosdb_account.infra.name
   description = "Cosmos DB account name"
 }
 

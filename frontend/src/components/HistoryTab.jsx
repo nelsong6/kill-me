@@ -1,3 +1,16 @@
+// Workout history view with two modes: calendar and list.
+//
+// Calendar supports week/month/year views. Each day cell is color-coded by workout
+// type using DAY_CONFIG colors (the color mapping is the main thing dayConfig.js
+// is still needed for). Clicking a day opens the WorkoutDrawer pre-filled with
+// that day's workout type and date.
+//
+// Filter bar lets you toggle visibility of specific workout types (days 1-12) —
+// useful for seeing patterns like "how often do I do compound days?"
+//
+// Hover interaction: hovering a workout type in the legend or calendar dims all
+// other types, making it easy to visually isolate one workout type across time.
+
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { DAY_CONFIG } from '../utils/dayConfig';

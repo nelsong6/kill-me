@@ -1,12 +1,25 @@
+# References to shared infrastructure provisioned by infra-bootstrap.
+# Only resource names are stored here — full IDs and endpoints are resolved
+# via data source lookups at plan time.
+
 locals {
   infra = {
-    resource_group_name              = "infra"
-    dns_zone_name                    = "romaine.life"
-    container_app_environment_id     = "/subscriptions/aee0cbd2-8074-4001-b610-0f8edb4eaa3c/resourceGroups/infra/providers/Microsoft.App/managedEnvironments/infra-aca"
-    cosmos_db_account_name           = "infra-cosmos"
-    cosmos_db_account_id             = "/subscriptions/aee0cbd2-8074-4001-b610-0f8edb4eaa3c/resourceGroups/infra/providers/Microsoft.DocumentDB/databaseAccounts/infra-cosmos"
-    azure_app_config_endpoint        = "https://infra-appconfig.azconfig.io"
-    azure_app_config_resource_id     = "/subscriptions/aee0cbd2-8074-4001-b610-0f8edb4eaa3c/resourceGroups/infra/providers/Microsoft.AppConfiguration/configurationStores/infra-appconfig"
-    key_vault_name                   = "romaine-kv"
+    resource_group_name = "infra"
+    dns_zone_name       = "romaine.life"
   }
+}
+
+data "azurerm_container_app_environment" "infra" {
+  name                = "infra-aca"
+  resource_group_name = local.infra.resource_group_name
+}
+
+data "azurerm_cosmosdb_account" "infra" {
+  name                = "infra-cosmos"
+  resource_group_name = local.infra.resource_group_name
+}
+
+data "azurerm_app_configuration" "infra" {
+  name                = "infra-appconfig"
+  resource_group_name = local.infra.resource_group_name
 }

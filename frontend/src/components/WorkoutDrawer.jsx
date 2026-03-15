@@ -1,3 +1,18 @@
+// Slide-in drawer from the right edge for logging workouts.
+//
+// The drawer can be opened two ways:
+//   1. The persistent "New Workout" tab button (always visible in top-right)
+//   2. Clicking a day in the HistoryTab calendar (pre-fills day type and date)
+//
+// The flipper toggle is a vertical switch that controls which workout day to log:
+//   - "Next" (top position): uses the current day in the cycle
+//   - "Pick" (bottom position): dropdown to select any of the other 11 days
+// When opened from the calendar with a specific day, the flipper auto-sets to
+// "Pick" mode with that day pre-selected.
+//
+// Date picker defaults to today but allows backdating — useful for logging a
+// workout that happened yesterday or earlier.
+
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getDayInfo, DAY_CONFIG } from '../utils/dayConfig';

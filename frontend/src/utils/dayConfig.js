@@ -1,10 +1,16 @@
-// 12-Day Synergy System Configuration
+// Static metadata for the 12-day Synergy cycle: names, colors, focus descriptions,
+// and safety notes. Used by HistoryTab (color coding), WorkoutDrawer (day info),
+// and TodayTab (override dropdown labels).
+//
+// The actual exercise library lives in the database (seeded from backend/seed-data.js).
+// This file intentionally does NOT contain exercise lists — components that need
+// exercises fetch them from the API.
+
 export const DAY_CONFIG = {
   1: {
     name: "Compound: Legs",
     focus: "Squat focus",
     description: "Heavy compound leg work with emphasis on squat variations",
-    exercises: ["Back Squat", "Front Squat", "Bulgarian Split Squat", "Leg Press"],
     color: "bg-blue-600",
     safetyNotes: null
   },
@@ -12,7 +18,6 @@ export const DAY_CONFIG = {
     name: "Calves",
     focus: "Active recovery",
     description: "Calf isolation for recovery and ankle stability",
-    exercises: ["Standing Calf Raise", "Seated Calf Raise", "Single-Leg Calf Raise"],
     color: "bg-green-600",
     safetyNotes: null
   },
@@ -20,7 +25,6 @@ export const DAY_CONFIG = {
     name: "Hamstrings",
     focus: "Main Lift: RDL",
     description: "Posterior chain emphasis with Romanian deadlifts",
-    exercises: ["Romanian Deadlift", "Lying Leg Curl", "Nordic Curl", "Good Morning"],
     color: "bg-purple-600",
     safetyNotes: null
   },
@@ -28,7 +32,6 @@ export const DAY_CONFIG = {
     name: "Abs",
     focus: "Flexion focus",
     description: "Core flexion and anti-extension work",
-    exercises: ["Cable Crunch", "Hanging Leg Raise", "Ab Wheel", "Dead Bug"],
     color: "bg-yellow-600",
     safetyNotes: null
   },
@@ -36,7 +39,6 @@ export const DAY_CONFIG = {
     name: "Compound: Pulls",
     focus: "Back/Rows",
     description: "Horizontal and vertical pulling movements",
-    exercises: ["Barbell Row", "Pull-Up", "Lat Pulldown", "Cable Row"],
     color: "bg-indigo-600",
     safetyNotes: null
   },
@@ -44,7 +46,6 @@ export const DAY_CONFIG = {
     name: "Bicep",
     focus: "Accessory",
     description: "Bicep isolation work following pull day",
-    exercises: ["Barbell Curl", "Hammer Curl", "Preacher Curl", "Cable Curl"],
     color: "bg-pink-600",
     safetyNotes: null
   },
@@ -52,7 +53,6 @@ export const DAY_CONFIG = {
     name: "Torso",
     focus: "Extension/Rotation",
     description: "Core extension and rotational strength",
-    exercises: ["Back Extension", "Pallof Press", "Russian Twist", "Bird Dog"],
     color: "bg-teal-600",
     safetyNotes: null
   },
@@ -60,7 +60,6 @@ export const DAY_CONFIG = {
     name: "Pecs (Mobility)",
     focus: "⚠️ CRITICAL: NO DIPS or HEAVY PRESSING",
     description: "Light mobility work only - shoulder injury protection",
-    exercises: ["Cable Fly (Light)", "Pec Stretch", "Floor Press (Light)", "Band Pull-Apart"],
     color: "bg-red-600",
     safetyNotes: "⚠️ SHOULDER SAFETY: Do NOT perform dips or heavy pressing movements. Light flys and holds only. Focus on mobility and control."
   },
@@ -68,7 +67,6 @@ export const DAY_CONFIG = {
     name: "Compound: Push",
     focus: "DB Bench - Dips allowed here",
     description: "Heavy pressing work (dips are safe on this day)",
-    exercises: ["Dumbbell Bench Press", "Dips", "Incline DB Press", "Push-Up Variations"],
     color: "bg-orange-600",
     safetyNotes: null
   },
@@ -76,7 +74,6 @@ export const DAY_CONFIG = {
     name: "Triceps",
     focus: "Cable High Cross - NO pushdowns",
     description: "Tricep isolation (user prefers no pushdowns)",
-    exercises: ["Cable High Cross", "Overhead Extension", "Skull Crusher", "Close-Grip Bench"],
     color: "bg-cyan-600",
     safetyNotes: "User preference: Avoid tricep pushdowns"
   },
@@ -84,7 +81,6 @@ export const DAY_CONFIG = {
     name: "Deltoid",
     focus: "Rear/Side isolation",
     description: "Shoulder isolation with rear and side delt focus",
-    exercises: ["Rear Delt Fly", "Lateral Raise", "Face Pull", "Upright Row"],
     color: "bg-violet-600",
     safetyNotes: null
   },
@@ -92,7 +88,6 @@ export const DAY_CONFIG = {
     name: "Grip",
     focus: "Forearm burnout",
     description: "Grip strength and forearm endurance",
-    exercises: ["Farmer's Walk", "Wrist Curl", "Reverse Curl", "Dead Hang"],
     color: "bg-lime-600",
     safetyNotes: null
   }

@@ -1,3 +1,7 @@
+# Azure Static Web App for the React frontend. Free tier — deployment is handled
+# by GitHub Actions (container-app-build workflow), not by SWA's built-in CI.
+# The lifecycle ignore on repository_url/branch prevents Terraform from fighting
+# with the GitHub integration.
 resource "azurerm_static_web_app" "workout" {
   name                = "workout-app"
   resource_group_name = azurerm_resource_group.workout.name
@@ -31,6 +35,9 @@ resource "azurerm_static_web_app_custom_domain" "workout" {
   depends_on        = [azurerm_dns_cname_record.workout]
 }
 
+# Auth0 SPA client for the frontend. Callbacks and origins include both localhost
+# (for local dev on Vite's default port) and the production custom domain.
+# Grant types include refresh_token so users stay logged in across sessions.
 resource "auth0_client" "frontend_spa" {
   name           = "WorkoutTracker Web UI"
   app_type       = "spa"

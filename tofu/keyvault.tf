@@ -1,5 +1,5 @@
 data "azurerm_key_vault" "main" {
-  name                = local.infra.key_vault_name
+  name                = "romaine-kv"
   resource_group_name = local.infra.resource_group_name
 }
 

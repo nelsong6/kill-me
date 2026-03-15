@@ -1,3 +1,14 @@
+// Express API server for the Synergy 12 workout tracker.
+//
+// Startup is async because Auth0 config and Cosmos DB credentials come from
+// Azure App Configuration (fetched at runtime via managed identity). The server
+// cannot register auth-protected routes until those values are available, so all
+// route registration happens inside startServer() after config is resolved.
+//
+// All data lives in a single Cosmos DB container partitioned by /userId.
+// Document types (workout-day-definition, exercise, logged-workout, settings)
+// share the container and are distinguished by a `type` field in queries.
+
 import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
@@ -11,7 +22,8 @@ import { fetchAppConfig } from './startup/appConfig.js';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware that does NOT depend on async config — safe to register now
+// Helmet and other sync middleware register before async startup — they don't
+// depend on App Configuration values.
 app.use(helmet());
 
 app.use(express.json());
@@ -59,7 +71,11 @@ async function startServer() {
     });
   });
 
-  // Database initialization endpoint (admin only)
+  // Database initialization endpoint (admin only).
+  // Creates the Cosmos DB database and container if they don't exist, then seeds
+  // the 12-day cycle definitions, historical workout logs, and exercise library
+  // from seed-data.js. Idempotent — uses upsert so re-running is safe.
+  // Only accessible from the admin panel (localhost dev mode).
   app.post('/api/admin/init-database', requireAuth, async (req, res) => {
     try {
       const credential = new DefaultAzureCredential();
@@ -239,7 +255,10 @@ async function startServer() {
     }
   });
 
-  // Log a completed workout (quick mode)
+  // Log a completed workout. Supports two modes:
+  // - "quick": just records that the day was done (no exercise details)
+  // - "detailed": includes per-exercise weight/reps/sets data
+  // The id includes a timestamp suffix to allow multiple logs per day.
   app.post('/api/log-workout', requireAuth, async (req, res) => {
     try {
       const userId = req.auth.payload.sub;
@@ -273,7 +292,9 @@ async function startServer() {
     }
   });
 
-  // Get all workouts for a user (legacy endpoint - returns old format)
+  // Legacy endpoint — returns logged workouts in the old format expected by
+  // WorkoutHistory.jsx (which is now dead code). Kept for backward compat but
+  // /api/logged-workouts is the canonical endpoint.
   app.get('/api/workouts', requireAuth, async (req, res) => {
     try {
       const userId = req.auth.payload.sub;
@@ -364,7 +385,9 @@ async function startServer() {
     }
   });
 
-  // Bulk import workouts (for migration)
+  // Bulk import workouts — used by the LocalStorage migration utility
+  // (frontend/src/utils/migration.js) to move dev data to Cosmos DB.
+  // Not a production feature; exists for dev convenience.
   app.post('/api/workouts/bulk', requireAuth, async (req, res) => {
     try {
       const userId = req.auth.payload.sub;
@@ -425,7 +448,9 @@ async function startServer() {
     }
   });
 
-  // Get current day (user-specific)
+  // Get the user's current position in the 12-day cycle.
+  // Stored as a `settings` document in Cosmos DB, partitioned by userId.
+  // Defaults to day 1 if no settings document exists yet.
   app.get('/api/current-day', requireAuth, async (req, res) => {
     try {
       const userId = req.auth.payload.sub;

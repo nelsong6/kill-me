@@ -1,3 +1,16 @@
+// Shows the current day in the 12-day cycle with workout details and logging.
+//
+// Two logging modes:
+//   - Quick: one-tap "complete workout" — records that the day was done
+//   - Detailed: exercise checklist with weight/reps/sets input per exercise
+//
+// The day override toggle lets the user manually switch to a different day
+// without advancing the cycle. This is useful when life doesn't follow the
+// linear cycle order (e.g., gym-only exercises need to wait for a gym day).
+//
+// Fetches workout day definitions and exercises from the backend (not from
+// the static dayConfig.js — that's only used for the override dropdown labels).
+
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DAY_CONFIG } from '../utils/dayConfig';

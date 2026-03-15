@@ -1,3 +1,9 @@
+// Admin-only panel for initializing the Cosmos DB database and seeding it.
+// Calls POST /api/admin/init-database which creates the database/container
+// if they don't exist and upserts seed data. Only visible in admin mode
+// (localhost + dev). The backend uses DefaultAzureCredential, so the developer
+// must be logged into Azure CLI (`az login`) for this to work locally.
+
 import { useState } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';

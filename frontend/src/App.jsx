@@ -1,9 +1,21 @@
+// Root application component. Three tabs:
+//   - History (default): calendar/list view of past workouts with color-coded days
+//   - Today: shows current day in the 12-day cycle with quick/detailed logging
+//   - Admin (localhost only): database init and LocalStorage migration tools
+//
+// The WorkoutDrawer is a slide-in panel from the right edge, always accessible via
+// a persistent "New Workout" tab button. It allows logging any day's workout with
+// a date picker and a "next workout vs pick" flipper toggle.
+//
+// Data flow: useAuth provides getToken, which is passed to useWorkouts and to
+// child components that make API calls. refreshKey forces HistoryTab to re-fetch
+// after a workout is logged via the drawer.
+
 import { useState } from 'react';
 import { useWorkouts } from './hooks/useWorkouts';
 import { useAuth } from './hooks/useAuth';
 import { TodayTab } from './components/TodayTab';
 import { HistoryTab } from './components/HistoryTab';
-import { MigrationPanel } from './components/MigrationPanel';
 import { DatabaseInit } from './components/DatabaseInit';
 import { WorkoutDrawer } from './components/WorkoutDrawer';
 import { AuthGuard } from './components/AuthGuard';
@@ -109,8 +121,6 @@ function App() {
           {activeTab === 'admin' && adminMode && (
             <div className="animate-fadeIn space-y-8">
               <DatabaseInit />
-              <div className="border-t border-slate-700/50 my-8"></div>
-              <MigrationPanel />
             </div>
           )}
         </div>

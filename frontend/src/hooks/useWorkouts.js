@@ -1,3 +1,11 @@
+// Central state hook for workout data. Manages the user's current day in the
+// 12-day cycle and their workout history. Used by App.jsx to provide currentDay
+// and setDay to child components.
+//
+// The hook fetches both current-day and workout history on mount. The currentDay
+// is persisted server-side as a `settings` document in Cosmos DB so it survives
+// across devices and sessions.
+
 import { useState, useEffect } from 'react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';

@@ -1,10 +1,10 @@
-/**
- * Admin Mode Detection
- * 
- * Determines if the app is running in admin mode:
- * - Must be running on localhost
- * - Must have Azure CLI session (for local dev)
- */
+// Admin mode gates access to dev-only features: database initialization and
+// LocalStorage migration. It's enabled only when running on localhost in Vite's
+// dev mode — production builds never expose the admin tab.
+//
+// The "Must have Azure CLI session" note in the original docstring is misleading —
+// admin mode detection doesn't check for Azure CLI. The CLI session is needed by
+// the backend's DefaultAzureCredential, not by this frontend check.
 
 export const isLocalhost = () => {
   const hostname = window.location.hostname;

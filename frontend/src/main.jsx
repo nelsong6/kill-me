@@ -1,3 +1,8 @@
+// Entry point. Wraps App in Auth0Provider so the entire component tree has access
+// to authentication state. Auth0 config (domain, clientId, audience) comes from
+// Vite env vars — these are set in .env locally and injected by the generate-local-env
+// GitHub Actions workflow.
+
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { Auth0Provider } from '@auth0/auth0-react'

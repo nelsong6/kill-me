@@ -1,7 +1,14 @@
-/**
- * Seed Data for Workout Tracker
- * Based on workout spreadsheet data
- */
+// Seed data for the Synergy 12 workout tracker.
+//
+// This is the source of truth for the 12-day cycle definition, exercise library,
+// and historical workout logs. It is loaded into Cosmos DB via the admin
+// /api/admin/init-database endpoint.
+//
+// The day ordering is recovery-sequenced — see CLAUDE.md for the full rationale.
+// Key placement decisions are noted in each day's `focus` field.
+//
+// Historical logged workouts use a hardcoded userId that matches the Auth0 `sub`
+// claim for the primary user account.
 
 // 12-Day Workout Cycle Definition
 export const workoutDays = [

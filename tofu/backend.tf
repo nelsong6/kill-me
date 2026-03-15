@@ -1,6 +1,21 @@
 # ============================================================================
 # Azure Container Apps (Serverless Container Hosting)
 # ============================================================================
+#
+# The backend runs as a Container App with a system-assigned managed identity.
+# This identity gets three role assignments:
+#   1. Cosmos DB Data Contributor (read/write workout data)
+#   2. App Configuration Data Reader (fetch Auth0 config at startup)
+#   3. Implicitly, the Container App Environment's networking
+#
+# Custom domain setup follows Azure's three-step dance:
+#   1. TXT record for domain ownership verification
+#   2. CNAME record pointing to the container ingress FQDN
+#   3. Custom domain resource (cert binding managed outside Terraform via lifecycle ignore)
+#
+# The Auth0 resource server is created here (not in frontend.tf) because it
+# represents the backend API's identity in Auth0. The audience URL matches the
+# custom domain so tokens are scoped to this specific API.
 
 locals {
   back_app_dns_name = "${local.front_app_dns_name}.api"
@@ -10,7 +25,7 @@ locals {
 resource "azurerm_container_app" "workout_api" {
   name                         = "workout-api"
   resource_group_name          = azurerm_resource_group.workout.name
-  container_app_environment_id = local.infra.container_app_environment_id
+  container_app_environment_id = data.azurerm_container_app_environment.infra.id
   revision_mode                = "Single"
 
   # Enable system-assigned managed identity
@@ -34,7 +49,7 @@ resource "azurerm_container_app" "workout_api" {
 
       env {
         name  = "AZURE_APP_CONFIG_ENDPOINT"
-        value = local.infra.azure_app_config_endpoint
+        value = data.azurerm_app_configuration.infra.endpoint
       }
 
       env {
@@ -84,15 +99,15 @@ resource "azurerm_container_app" "workout_api" {
 # Grant Container App managed identity access to Cosmos DB
 resource "azurerm_cosmosdb_sql_role_assignment" "container_app_cosmos" {
   resource_group_name = local.infra.resource_group_name
-  account_name        = local.infra.cosmos_db_account_name
-  role_definition_id  = "${local.infra.cosmos_db_account_id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002" # Built-in Data Contributor
+  account_name        = data.azurerm_cosmosdb_account.infra.name
+  role_definition_id  = "${data.azurerm_cosmosdb_account.infra.id}/sqlRoleDefinitions/00000000-0000-0000-0000-000000000002" # Built-in Data Contributor
   principal_id        = azurerm_container_app.workout_api.identity[0].principal_id
-  scope               = local.infra.cosmos_db_account_id
+  scope               = data.azurerm_cosmosdb_account.infra.id
 }
 
 # Grant Container App managed identity read access to Azure App Configuration
 resource "azurerm_role_assignment" "container_app_appconfig_reader" {
-  scope                = local.infra.azure_app_config_resource_id
+  scope                = data.azurerm_app_configuration.infra.id
   role_definition_name = "App Configuration Data Reader"
   principal_id         = azurerm_container_app.workout_api.identity[0].principal_id
 }
