@@ -123,15 +123,15 @@ All workflows delegate to **nelsong6/pipeline-templates** reusable templates:
 ### Running locally
 
 ```bash
-npm run dev          # Starts both frontend (Vite :5173) and backend (Express :3000)
-npm run dev:frontend # Frontend only
-npm run dev:backend  # Backend only
+dev                  # Shell function — installs deps if needed, starts both servers
+cd backend && npm run dev   # Backend only (Express :3000)
+cd frontend && npm run dev  # Frontend only (Vite :5173)
 ```
 
 The frontend reads Auth0 config from `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID`,
 `VITE_AUTH0_AUDIENCE`, and `VITE_API_URL` environment variables.
 
-Admin mode (database init, migration panel) is available only on localhost in dev mode.
+Admin mode (database init) is available only on localhost in dev mode.
 
 ### Build number
 
@@ -146,3 +146,13 @@ via Vite's `define` config.
   routes once confirmed unused.
 
 ## Change Log
+
+### 2026-03-15
+
+- **Created CLAUDE.md and inline documentation** — wrote repo-level docs covering Synergy 12 philosophy, architecture, data model, CI/CD, and dev setup. Added inline comments to all source files (backend, frontend components/hooks/utils, tofu) following global documentation standards (meta in CLAUDE.md, component-level in code).
+- **Deleted dead components** — removed `WorkoutForm.jsx`, `WorkoutHistory.jsx`, `DayCard.jsx`, `DayNavigation.jsx` (superseded by TodayTab/HistoryTab, no remaining imports).
+- **Removed dev scaffolding** — deleted `MigrationPanel.jsx`, `migration.js`, `useLocalStorage.js` (one-time localStorage→Cosmos migration tooling, no longer needed). Removed MigrationPanel import/usage from `App.jsx`.
+- **Cleaned up dayConfig.js** — removed `exercises` arrays from all day entries since the DB is the source of truth. Only names, colors, descriptions, and safety notes remain.
+- **Modernized remote-state.tf** — replaced hardcoded ARM resource IDs with `azurerm_*` data source lookups for Cosmos DB, Container App Environment, and App Configuration. Updated all downstream references in `backend.tf`, `db.tf`, `appconfig.tf`, `outputs.tf`, and `keyvault.tf`.
+- **Removed root-level npm artifacts** — deleted root `package.json`, `package-lock.json`, and `node_modules/`. The root package existed only to provide `concurrently` for running both servers. Replaced with a `dev` shell function in shell-config that auto-detects `backend/`+`frontend/` dirs, installs deps if `node_modules` is missing, and runs both servers concurrently.
+- **Added backend `.env`** — created `backend/.env` with `AZURE_APP_CONFIG_ENDPOINT` and `APP_CONFIG_PREFIX` for local development (gitignored).
