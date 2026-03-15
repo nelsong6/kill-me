@@ -49,6 +49,11 @@ output "auth0_audience" {
   description = "Auth0 API audience identifier for the backend"
 }
 
+output "container_app_environment_name" {
+  value       = data.azurerm_container_app_environment.infra.name
+  description = "Name of the shared Container App Environment"
+}
+
 output "app_config_prefix" {
   value       = local.front_app_dns_name
   description = "App Configuration key prefix, derived from the frontend DNS name"

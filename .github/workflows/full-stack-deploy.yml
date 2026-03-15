@@ -1,8 +1,10 @@
 name: Deploy
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Phase 1 - CI Build"]
     branches: [main]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -10,17 +12,22 @@ permissions:
   contents: read
 
 env:
-  STATIC_WEB_APP_NAME: workout-app
-  RESOURCE_GROUP_NAME: workout-rg
-  CONTAINER_APP_NAME: workout-api
-  ACA_ENVIRONMENT_NAME: infra-aca
-  BACKEND_HOSTNAME: workout.api.romaine.life
   REGISTRY: ghcr.io
-  IMAGE_NAME: nelsong6/kill-me/workout-api
+  # workflow_run uses the triggering workflow's SHA; workflow_dispatch uses the current SHA
+  TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
+  tofu-outputs:
+    uses: nelsong6/pipeline-templates/.github/workflows/tofu-outputs-template.yml@main
+    with:
+      storage_account: ${{ vars.TFSTATE_STORAGE_ACCOUNT }}
+      state_key: kill-me.tfstate
+    secrets: inherit
+
   deploy-backend:
     name: Deploy Backend API
+    needs: tofu-outputs
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Azure Login via OIDC
@@ -31,27 +38,41 @@ jobs:
           subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
 
       - name: Deploy to Container App
+        env:
+          CONTAINER_APP_NAME: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).container_app_name }}
+          RESOURCE_GROUP_NAME: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).resource_group_name }}
+          IMAGE_NAME: ${{ github.repository }}/${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).container_app_name }}
         run: |
           az containerapp update \
-            --name ${{ env.CONTAINER_APP_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP_NAME }} \
-            --image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            --name "$CONTAINER_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP_NAME" \
+            --image "${{ env.REGISTRY }}/$IMAGE_NAME:${{ env.TARGET_SHA }}"
 
       - name: Bind Custom Domain & Generate Certificate
+        env:
+          CONTAINER_APP_NAME: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).container_app_name }}
+          RESOURCE_GROUP_NAME: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).resource_group_name }}
+          BACKEND_API_URL: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).backend_api_url }}
+          ACA_ENVIRONMENT_NAME: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).container_app_environment_name }}
         run: |
+          BACKEND_HOSTNAME="${BACKEND_API_URL#https://}"
           az containerapp hostname bind \
-            --hostname ${{ env.BACKEND_HOSTNAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP_NAME }} \
-            --name ${{ env.CONTAINER_APP_NAME }} \
-            --environment ${{ env.ACA_ENVIRONMENT_NAME }} \
+            --hostname "$BACKEND_HOSTNAME" \
+            --resource-group "$RESOURCE_GROUP_NAME" \
+            --name "$CONTAINER_APP_NAME" \
+            --environment "$ACA_ENVIRONMENT_NAME" \
             --validation-method CNAME
 
   deploy-frontend:
     name: Deploy Frontend
+    needs: tofu-outputs
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -73,10 +94,13 @@ jobs:
 
       - name: Get Static Web App Token
         id: swa-token
+        env:
+          STATIC_WEB_APP_NAME: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).static_web_app_name }}
+          RESOURCE_GROUP_NAME: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).resource_group_name }}
         run: |
           TOKEN=$(az staticwebapp secrets list \
-            --name ${{ env.STATIC_WEB_APP_NAME }} \
-            --resource-group ${{ env.RESOURCE_GROUP_NAME }} \
+            --name "$STATIC_WEB_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP_NAME" \
             --query "properties.apiKey" -o tsv)
           echo "::add-mask::$TOKEN"
           echo "deployment_token=$TOKEN" >> $GITHUB_OUTPUT
