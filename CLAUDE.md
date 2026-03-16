@@ -156,7 +156,7 @@ via Vite's `define` config.
 
 - **Fixed custom domain bind in deploy workflow** — `az containerapp hostname bind` was failing because the ACA environment (`infra-aca`) lives in the `infra` resource group, not `workout-rg`. Fixed by passing the full environment resource ID instead of just the name. Also made the step idempotent: skips if a managed certificate is already bound (one-time bootstrap operation).
 
-### 2026-03-25
+### 2026-03-15
 
 - **Switched auth from Auth0 to Microsoft sign-in** — replaced Auth0 SPA flow with MSAL.js redirect flow (Microsoft identity). Backend now verifies Microsoft ID tokens via JWKS and issues self-signed JWTs. Whitelisted email (`nelson-devops-project@outlook.com`) gets admin role; all others get viewer.
 - **Adopted "view/edit" access model** — anyone can browse workout history and today's workout (GET endpoints are public). Only admin can log workouts, change the current day, or access admin tools. Frontend conditionally hides edit UI for non-admin users.
