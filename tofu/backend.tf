@@ -68,6 +68,12 @@ resource "azurerm_container_app" "workout_api" {
     max_replicas = 3
   }
 
+  # The deploy workflow updates the image tag via `az containerapp update`.
+  # Ignore drift so tofu doesn't fight the deploy pipeline over the tag.
+  lifecycle {
+    ignore_changes = [template[0].container[0].image]
+  }
+
   # Ingress configuration
   ingress {
     external_enabled = true
