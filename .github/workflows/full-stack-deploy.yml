@@ -53,12 +53,23 @@ jobs:
           CONTAINER_APP_NAME: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).container_app_name }}
           RESOURCE_GROUP_NAME: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).resource_group_name }}
           BACKEND_API_URL: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).backend_api_url }}
+          ACA_ENV_ID: /subscriptions/${{ vars.ARM_SUBSCRIPTION_ID }}/resourceGroups/infra/providers/Microsoft.App/managedEnvironments/${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).container_app_environment_name }}
         run: |
           BACKEND_HOSTNAME="${BACKEND_API_URL#https://}"
+          # Skip if certificate is already bound
+          BINDING=$(az containerapp hostname list \
+            --name "$CONTAINER_APP_NAME" \
+            --resource-group "$RESOURCE_GROUP_NAME" \
+            --query "[?name=='$BACKEND_HOSTNAME'].bindingType" -o tsv)
+          if [ "$BINDING" = "SniEnabled" ]; then
+            echo "Certificate already bound for $BACKEND_HOSTNAME, skipping."
+            exit 0
+          fi
           az containerapp hostname bind \
             --hostname "$BACKEND_HOSTNAME" \
             --resource-group "$RESOURCE_GROUP_NAME" \
             --name "$CONTAINER_APP_NAME" \
+            --environment "$ACA_ENV_ID" \
             --validation-method CNAME
 
   deploy-frontend:
