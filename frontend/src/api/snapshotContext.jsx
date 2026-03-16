@@ -77,6 +77,19 @@ export function useSnapshot() {
 
 // Unified data source hook — routes reads to snapshot or live API.
 // Write operations always go through apiFetch regardless of auth state.
+//
+// IMPORTANT: Callers MUST check `isReady` before calling any fetch function.
+// On first render the snapshot is still loading (WASM init + fetch). During
+// that window `db` is null, so `isLive` evaluates to true and fetches hit the
+// live API — which doesn't exist for anonymous visitors. The result is a
+// permanent loading spinner. Correct usage:
+//
+//   const { fetchWorkouts, isReady } = useDataSource();
+//   useEffect(() => {
+//     if (!isReady) return;
+//     fetchWorkouts().then(setWorkouts);
+//   }, [isReady]);
+//
 export function useDataSource() {
   const { token } = useAuth();
   const { db, loading: snapshotLoading } = useSnapshot();

@@ -47,8 +47,14 @@ frontend/          React 19 SPA (Vite + Tailwind CSS 4)
   ├── Centralized color palette (src/colors.js)
   ├── Microsoft sign-in via MSAL.js (redirect flow)
   ├── Public viewing, admin-only editing
+  ├── In-browser SQLite via sql.js/WASM for anonymous visitors (instant loads)
   ├── Deployed to Azure Static Web App
   └── Calls backend API with Bearer tokens
+
+snapshot/          SQLite snapshot generator (Node 20)
+  ├── Queries Cosmos DB for all public document types
+  ├── Writes a SQLite .db file consumed by the frontend
+  └── Runs daily via GitHub Actions cron (6:00 AM UTC)
 
 backend/           Express.js API (Node 20)
   ├── Self-signed JWT auth (Microsoft ID token exchange)
@@ -64,21 +70,25 @@ tofu/              OpenTofu infrastructure-as-code
 
 ### Auth model
 
-"Everyone can view, only Nelson can edit." Public visitors see workout history
-and the current day in the cycle. Logging workouts, changing the current day, and
-admin actions require signing in with the whitelisted Microsoft account
+"Everyone can view, only Nelson can edit." Anonymous visitors get instant page
+loads from an in-browser SQLite snapshot (sql.js/WASM) — no backend cold start.
+Authenticated users switch to the live API. Logging workouts, changing the current
+day, and admin actions require signing in with the whitelisted Microsoft account
 (`nelson-devops-project@outlook.com`).
 
 ### Data flow
 
-1. Anyone can browse — GET endpoints are public (no auth required)
-2. To edit, user signs in with Microsoft via MSAL.js redirect flow
-3. Frontend sends Microsoft ID token to backend `/auth/microsoft/login`
-4. Backend verifies ID token against Microsoft JWKS, assigns admin/viewer role
-5. Backend issues self-signed 7-day JWT; frontend stores it in localStorage
-6. Frontend attaches JWT as Bearer token on write requests
-7. Backend validates JWT, extracts `sub` claim as userId
-8. Backend queries/writes Cosmos DB, partitioned by userId
+1. Anonymous visitors load `snapshot.db` via sql.js/WASM — reads served entirely in-browser
+2. On sign-in, snapshot is discarded and all reads switch to the live backend API
+
+**Critical `useDataSource()` contract:** Every consumer of `useDataSource()` MUST check `isReady` before calling any fetch function. The snapshot loads asynchronously (WASM init + network fetch). Until it's ready, `db` is null, `isLive` evaluates to true, and fetches silently hit the live API — which doesn't exist for anonymous visitors, causing a permanent loading spinner. Pattern: `const { fetchFoo, isReady } = useDataSource(); useEffect(() => { if (!isReady) return; fetchFoo()... }, [isReady]);`
+3. To edit, user signs in with Microsoft via MSAL.js redirect flow
+4. Frontend sends Microsoft ID token to backend `/auth/microsoft/login`
+5. Backend verifies ID token against Microsoft JWKS, assigns admin/viewer role
+6. Backend issues self-signed 7-day JWT; frontend stores it in localStorage
+7. Frontend attaches JWT as Bearer token on write requests
+8. Backend validates JWT, extracts `sub` claim as userId
+9. Backend queries/writes Cosmos DB, partitioned by userId
 
 ### Shared infrastructure
 
@@ -100,7 +110,7 @@ See also: **pipeline-templates** for reusable GitHub Actions workflows, and
 
 ## Data Model (Cosmos DB)
 
-Single container (`workouts`) partitioned by `/userId`. Four document types
+Single container (`workouts`) partitioned by `/userId`. Document types
 distinguished by a `type` field:
 
 | Type | Purpose | Key fields |
@@ -108,6 +118,7 @@ distinguished by a `type` field:
 | `workout-day-definition` | Static cycle definition (days 1-12) | `dayNumber`, `name`, `focus`, `primaryMuscleGroups` |
 | `exercise` | Exercise library entries per day | `dayNumber`, `name`, `equipment`, `targetWeight/Reps/Sets` |
 | `logged-workout` | A completed workout session | `userId`, `dayNumber`, `date`, `mode` (quick/detailed), `exercises[]` |
+| `soreness-entry` | Daily soreness journal entry | `userId`, `date`, `muscles[]` (`{group, muscle, level}`) |
 | `settings` | Per-user settings (current day) | `userId`, `currentDay` |
 | `account` | Microsoft auth account record | `userId`, `provider`, `name`, `email`, `role` |
 
@@ -127,6 +138,7 @@ All workflows delegate to **nelsong6/pipeline-templates** reusable templates:
 | `tofu-lockfile-check.yml` | PR touching `tofu/` | Validates lockfile is current |
 | `tofu-lockfile-update.yml` | Manual dispatch | Regenerates lockfile across platforms |
 | `generate-local-env.yml` | Manual dispatch | Generates `frontend/.env` and `backend/.env` from infra outputs |
+| `snapshot.yml` | Daily cron (6 AM UTC) / manual | Generates SQLite snapshot from Cosmos DB, builds frontend with snapshot baked in, deploys to SWA |
 
 ## Development
 
@@ -156,6 +168,26 @@ The frontend displays a git short hash as the build number, injected at build ti
 via Vite's `define` config.
 
 ## Change Log
+
+### 2026-03-15 (session 8)
+
+- **Fixed admin role not assigned after Microsoft login** — the email comparison in `microsoft-routes.js` used strict equality (`===`) against the lowercase `ALLOWED_EMAIL` constant, but Microsoft ID tokens can return emails in varying case (e.g., `Nelson-DevOps-Project@outlook.com`). Added `.toLowerCase()` to the incoming email before comparison so admin role assignment is case-insensitive.
+
+### 2026-03-15 (session 7)
+
+- **Added static SQLite snapshot system for anonymous visitors** — the backend Container App scales to zero when idle, causing 30+ second cold starts for anonymous visitors. Built a snapshot pipeline: a GitHub Actions cron job (`snapshot.yml`) runs daily at 6:00 AM UTC, queries all 5 public document types from Cosmos DB via `@azure/cosmos`, writes them into a SQLite database (`snapshot/generate-snapshot.js` using `better-sqlite3`), and deploys the `.db` file as a static asset with the frontend. The frontend loads it in-browser via sql.js (SQLite compiled to WASM). Anonymous users get instant page loads from the snapshot; authenticated users discard the snapshot and switch to the live API. New files: `snapshot/` directory (generator script + deps), `frontend/src/api/snapshot.js` (query functions mirroring API shapes), `frontend/src/api/snapshotContext.jsx` (`SnapshotProvider`, `useSnapshot`, `useDataSource` hooks). Modified `TodayTab`, `HistoryTab`, `SorenessTab`, and `useWorkouts` to read from `useDataSource()` instead of `apiFetch` for GET operations. Write operations remain live API only.
+- **Self-hosted sql.js WASM** — `vite.config.js` copies `sql-wasm.wasm` from `node_modules` to `public/` at build time, avoiding CDN dependency. Added `.db` and `.wasm` MIME types to `staticwebapp.config.json`.
+- **Set up Cosmos DB RBAC for CI service principal** — the GitHub Actions OIDC service principal needed `Cosmos DB Built-in Data Reader` role on the Cosmos account to query data during snapshot generation. Assigned via `az cosmosdb sql role assignment create`.
+- **Added `AZURE_APP_CONFIG_ENDPOINT` GitHub variable** — the snapshot workflow resolves the Cosmos DB endpoint from App Config at runtime (via `az appconfig kv show`) rather than from tofu outputs, working around the pipeline-templates limitation where output-only tofu changes don't trigger an apply.
+- **Added tofu outputs for cosmos_db_endpoint and app_config_endpoint** — defined in `outputs.tf` but not yet applied to state (not needed by snapshot workflow since it reads from App Config directly).
+
+### 2026-03-15 (session 6)
+
+- **Added Soreness tab** — new public tab (`SorenessTab.jsx`) in the left sidebar between Cycle and Log for tracking daily muscle soreness. Nelson's spreadsheet had a free-text "Soreness calendar" sheet; this replaces it with structured data. Each entry is a date with an array of sore muscles, each having a group, optional specific muscle name, and 1-10 severity level. The `muscle` field can be `null` for group-level soreness (e.g. "Biceps" without specifying a head) — Nelson preferred the flexibility to be either specific or general. Admin can add/edit entries via a muscle picker that supports both group-level and specific-muscle selection, with a search function. Public users can view the history.
+- **Created muscle taxonomy** — `muscleTaxonomy.js` defines 12 muscle groups (Quadriceps, Hamstrings, Glutes, Calves, Pecs, Lats & Back, Deltoids, Biceps, Triceps, Forearms & Grip, Abs & Core, Hip & Adductors) with specific muscles under each, including anatomical location hints. Includes a `searchMuscles()` function for the picker's search bar.
+- **Created SVG anatomy reference diagrams** — `AnatomyDiagrams.jsx` renders schematic SVG diagrams for each muscle group, shown in the picker when a group is expanded. Helps identify which specific muscle is sore. Supports a `highlightMuscle` prop for visual emphasis. Uses the app's color palette (cyan outlines, semi-transparent fills).
+- **Added soreness API endpoints** — `GET /api/soreness` (public), `POST /api/soreness` (admin, upserts by date), `DELETE /api/soreness/:date` (admin). New `soreness-entry` document type in Cosmos DB, one per date, containing `muscles[]` array.
+- **Added soreness seed endpoint** — `POST /api/admin/seed-soreness` upserts 40 historical entries from the spreadsheet (Nov 2025 – Feb 2026). Accessible via "Seed Soreness Data" button in the admin panel (`DatabaseInit.jsx`). Seed data lives in `seed-soreness.js` as a data export. Severity levels inferred from spreadsheet qualifiers ("light"→3, "nearly faded"→2, "very sore"→8, no qualifier→5).
 
 ### 2026-03-15 (session 5)
 
