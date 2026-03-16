@@ -43,6 +43,8 @@ day. Dips are fine on Day 9 (assisted machine at -90 lbs), but never on Day 8.
 
 ```text
 frontend/          React 19 SPA (Vite + Tailwind CSS 4)
+  ├── Left sidebar tab navigation (inline styles, matches bender-world/eight-queens)
+  ├── Centralized color palette (src/colors.js)
   ├── Microsoft sign-in via MSAL.js (redirect flow)
   ├── Public viewing, admin-only editing
   ├── Deployed to Azure Static Web App
@@ -89,7 +91,8 @@ This repo builds on shared resources provisioned by **infra-bootstrap**:
 
 App-specific resources created by this repo: the Cosmos DB database and container,
 the Container App, the Static Web App, JWT signing secret in Key Vault, DNS records,
-and the Microsoft sign-in app registration.
+the Microsoft sign-in app registration, and a per-app App Config key
+(`workout:microsoft_client_id`).
 
 See also: **pipeline-templates** for reusable GitHub Actions workflows, and
 **shell-config** for the global Claude config chain and DevOps tooling.
@@ -122,7 +125,7 @@ All workflows delegate to **nelsong6/pipeline-templates** reusable templates:
 | `lint.yml` | PR to main | Trailing newlines, YAML, spelling, markdown, tofu fmt |
 | `tofu-lockfile-check.yml` | PR touching `tofu/` | Validates lockfile is current |
 | `tofu-lockfile-update.yml` | Manual dispatch | Regenerates lockfile across platforms |
-| `generate-local-env.yml` | Manual dispatch | Generates `frontend/config.js` and `backend/.env` from infra outputs |
+| `generate-local-env.yml` | Manual dispatch | Generates `frontend/.env` and `backend/.env` from infra outputs |
 
 ## Development
 
@@ -131,6 +134,7 @@ All workflows delegate to **nelsong6/pipeline-templates** reusable templates:
 - Node 20+
 - Azure CLI (`az login` for local Cosmos DB and Key Vault access)
 - Backend `.env` with `AZURE_APP_CONFIG_ENDPOINT`, `APP_CONFIG_PREFIX`, and `KEY_VAULT_URL`
+- Frontend `.env` with `VITE_MICROSOFT_CLIENT_ID` and `VITE_API_URL`
 
 ### Running locally
 
@@ -154,10 +158,14 @@ via Vite's `define` config.
 
 ### 2026-03-16
 
+- **Fixed loading screen hang on MSAL failure** — `AuthContext.jsx` had no error handling around `msalReady` / `handleRedirectPromise()`. If MSAL initialization failed (e.g., missing client ID), the error was silently swallowed and `setLoading(false)` never ran, leaving the app stuck on "Loading..." forever. Wrapped in try/catch/finally so the app always progresses past the loading state.
+- **Created frontend `.env` for local dev** — added `frontend/.env` (gitignored) with `VITE_MICROSOFT_CLIENT_ID` (fetched from Azure App Config via `az appconfig kv show`) and `VITE_API_URL=http://localhost:3000`. The Microsoft client ID is a public value injected at build time — standard MSAL pattern.
 - **Fixed custom domain bind in deploy workflow** — `az containerapp hostname bind` was failing because the ACA environment (`infra-aca`) lives in the `infra` resource group, not `workout-rg`. Fixed by passing the full environment resource ID instead of just the name. Also made the step idempotent: skips if a managed certificate is already bound (one-time bootstrap operation).
 - **Fixed backend Dockerfile** — `COPY server.js ./` only copied the entrypoint, missing `auth/`, `middleware/`, `startup/`, and `seed-data.js`. Container was crash-looping with `ERR_MODULE_NOT_FOUND`. Changed to `COPY . .` (`.dockerignore` already excludes `node_modules`, `.env`, etc.).
 - **Added Key Vault Secrets User role for Container App** — the managed identity was missing RBAC to read the JWT signing secret from Key Vault, causing a 403 `ForbiddenByRbac` on startup. Created the role assignment manually (CI identity lacks `roleAssignments/write` on the infra RG KV scope) and imported into tofu state via an `import` block.
 - **Added `ignore_changes` for container image in tofu** — the deploy workflow sets the image tag to a commit SHA via `az containerapp update`, but tofu had `image = "...latest"` which doesn't exist in GHCR. Without `ignore_changes`, every tofu apply tried to reset the tag and failed with `MANIFEST_UNKNOWN`.
+- **Left sidebar tab navigation** — replaced horizontal top tabs (Tailwind) with vertical left sidebar `TabBar` component using inline styles, matching the bender-world/eight-queens pattern. Added centralized `colors.js` palette. Converted `App.jsx` and `UserProfile.jsx` from Tailwind classes to inline styles. App shell is now: sticky header → flex row (sidebar + scrollable content).
+- **Moved Microsoft client ID to App Config** — backend was reading `MICROSOFT_CLIENT_ID` from a Container App env var (set by tofu). Moved to Azure App Configuration as `workout:microsoft_client_id`, written by a new `azurerm_app_configuration_key` resource in tofu. Backend `appConfig.js` now fetches it from App Config alongside other settings. Removed the env var from the Container App template.
 
 ### 2026-03-15
 

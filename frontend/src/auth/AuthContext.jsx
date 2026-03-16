@@ -39,29 +39,34 @@ export function AuthProvider({ children }) {
   // Handle MSAL redirect response (runs on any page after Microsoft redirects back)
   useEffect(() => {
     (async () => {
-      await msalReady;
-      const response = await msalInstance.handleRedirectPromise();
+      try {
+        await msalReady;
+        const response = await msalInstance.handleRedirectPromise();
 
-      if (response?.idToken) {
-        try {
-          const res = await fetchWithRetry(`${API_URL}/auth/microsoft/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ credential: response.idToken }),
-          });
+        if (response?.idToken) {
+          try {
+            const res = await fetchWithRetry(`${API_URL}/auth/microsoft/login`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ credential: response.idToken }),
+            });
 
-          if (!res.ok) {
-            const body = await res.json().catch(() => ({}));
-            console.error('Login failed:', res.status, body.error);
-          } else {
-            const data = await res.json();
-            setSession(data.token, data.user);
+            if (!res.ok) {
+              const body = await res.json().catch(() => ({}));
+              console.error('Login failed:', res.status, body.error);
+            } else {
+              const data = await res.json();
+              setSession(data.token, data.user);
+            }
+          } catch (err) {
+            console.error('Login failed:', err);
           }
-        } catch (err) {
-          console.error('Login failed:', err);
         }
+      } catch (err) {
+        console.error('MSAL initialization failed:', err);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     })();
   }, []);
 
