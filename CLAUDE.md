@@ -157,6 +157,10 @@ via Vite's `define` config.
 
 ## Change Log
 
+### 2026-03-15 (session 5)
+
+- **Transformed Today tab into Workout view** — the Today tab was locked to the current day with no way to browse other days' details. Renamed to "Workout" and added a 12-day selector strip at the top (numbered pill buttons with a green dot on the current day). Defaults to the current day but allows selecting any day to see its full breakdown: description, recovery sequencing rationale, compound/today badges, safety notes, exercises with targets, and muscle groups. Exercise list is now always visible to all users (previously only shown inside admin-only detailed logging mode). Logging modes (quick/detailed) remain admin-only, below the exercise list. `TodayTab.jsx` now imports `DAY_CONFIG`, `colors`, and `RECOVERY_NOTES` (previously only in `CycleTab`). Tab label in `App.jsx` changed from "Today" to "Workout".
+
 ### 2026-03-15 (session 4)
 
 - **Moved day override from Cycle tab to Admin tab** — the override toggle and day dropdown were in `CycleTab.jsx` but belong with other admin tools. Moved override state, toggle button, and dropdown to `DatabaseInit.jsx`. `CycleTab` no longer takes `onDayChange` or `isAdmin` props. `App.jsx` now passes `currentDay` and `onDayChange` to `DatabaseInit`.

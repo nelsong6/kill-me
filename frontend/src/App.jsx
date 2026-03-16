@@ -1,7 +1,7 @@
 // Root application component. Left sidebar tab navigation (matches bender-world /
 // eight-queens pattern). Tabs:
 //   - History (default): calendar/list view of past workouts with color-coded days
-//   - Today: shows current day in the 12-day cycle with quick/detailed logging
+//   - Workout: detailed view of any day in the cycle (defaults to current day)
 //   - Cycle: Synergy 12 overview — philosophy, day breakdown, recovery notes
 //   - Log (admin only): log a workout with quick or detailed mode
 //   - Admin (localhost only + admin role): day override, database init and data migration
@@ -52,7 +52,7 @@ function App() {
 
   const tabs = [
     { id: 'history', label: 'History' },
-    { id: 'today', label: 'Today' },
+    { id: 'today', label: 'Workout' },
     { id: 'cycle', label: 'Cycle' },
     ...(isAdmin ? [{ id: 'log', label: 'Log' }] : []),
     ...(showAdminTab ? [{ id: 'admin', label: 'Admin' }] : [])
