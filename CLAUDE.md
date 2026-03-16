@@ -89,7 +89,7 @@ This repo builds on shared resources provisioned by **infra-bootstrap**:
 
 App-specific resources created by this repo: the Cosmos DB database and container,
 the Container App, the Static Web App, JWT signing secret in Key Vault, DNS records,
-and Key Vault role assignment.
+and the Microsoft sign-in app registration.
 
 See also: **pipeline-templates** for reusable GitHub Actions workflows, and
 **shell-config** for the global Claude config chain and DevOps tooling.
@@ -117,6 +117,8 @@ All workflows delegate to **nelsong6/pipeline-templates** reusable templates:
 | Workflow | Trigger | What it does |
 | -------- | ------- | ------------ |
 | `container-app-build.yml` | Push/PR to main | Builds Docker image, pushes to GHCR |
+| `full-stack-deploy.yml` | After CI Build succeeds / manual | Deploys backend (Container App image update + custom domain cert), deploys frontend (SWA) |
+| `tofu.yml` | Push/PR touching `tofu/` | Plan on PR, apply on main merge |
 | `lint.yml` | PR to main | Trailing newlines, YAML, spelling, markdown, tofu fmt |
 | `tofu-lockfile-check.yml` | PR touching `tofu/` | Validates lockfile is current |
 | `tofu-lockfile-update.yml` | Manual dispatch | Regenerates lockfile across platforms |
@@ -149,6 +151,10 @@ The frontend displays a git short hash as the build number, injected at build ti
 via Vite's `define` config.
 
 ## Change Log
+
+### 2026-03-16
+
+- **Fixed custom domain bind in deploy workflow** — `az containerapp hostname bind` was failing because the ACA environment (`infra-aca`) lives in the `infra` resource group, not `workout-rg`. Fixed by passing the full environment resource ID instead of just the name. Also made the step idempotent: skips if a managed certificate is already bound (one-time bootstrap operation).
 
 ### 2026-03-25
 
