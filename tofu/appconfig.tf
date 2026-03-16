@@ -1,6 +1,11 @@
 # ============================================================================
 # Azure App Configuration Key-Values
 # ============================================================================
-# No app-specific App Config keys needed. The Cosmos DB endpoint is a shared key
-# managed by infra-bootstrap. Microsoft OAuth client ID comes from kill-me's own
-# app registration (injected as a Container App env var by tofu).
+
+# Per-app Microsoft OAuth client ID (kill-me has its own app registration,
+# unlike apps that use the shared infra-bootstrap registration).
+resource "azurerm_app_configuration_key" "microsoft_client_id" {
+  configuration_store_id = data.azurerm_app_configuration.infra.id
+  key                    = "${local.front_app_dns_name}:microsoft_client_id"
+  value                  = azuread_application.microsoft_login.client_id
+}

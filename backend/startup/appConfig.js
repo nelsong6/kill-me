@@ -40,9 +40,12 @@ export async function fetchAppConfig() {
     await kvClient.getSecret('kill-me-jwt-signing-secret')
   ).value;
 
-  // Microsoft OAuth client ID comes from a Container App env var (set by tofu),
-  // not from App Config — kill-me owns its own app registration.
-  const microsoftClientId = process.env.MICROSOFT_CLIENT_ID;
+  // Per-app Microsoft OAuth client ID (kill-me has its own app registration).
+  // Stored in App Config as {prefix}:microsoft_client_id by tofu.
+  const microsoftClientIdSetting = await appConfigClient.getConfigurationSetting({
+    key: `${prefix}:microsoft_client_id`,
+  });
+  const microsoftClientId = microsoftClientIdSetting.value;
 
   const config = {
     cosmosDbEndpoint: cosmosEndpointSetting.value,

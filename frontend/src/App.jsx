@@ -1,4 +1,5 @@
-// Root application component. Three tabs:
+// Root application component. Left sidebar tab navigation (matches bender-world /
+// eight-queens pattern). Three tabs:
 //   - History (default): calendar/list view of past workouts with color-coded days
 //   - Today: shows current day in the 12-day cycle with quick/detailed logging
 //   - Admin (localhost only + admin role): database init and data migration
@@ -15,7 +16,9 @@ import { HistoryTab } from './components/HistoryTab';
 import { DatabaseInit } from './components/DatabaseInit';
 import { WorkoutDrawer } from './components/WorkoutDrawer';
 import { UserProfile } from './components/UserProfile';
+import { TabBar } from './components/TabBar';
 import { isAdminMode } from './utils/adminMode';
+import { colors } from './colors';
 
 function App() {
   const [activeTab, setActiveTab] = useState('history');
@@ -46,87 +49,67 @@ function App() {
   };
 
   const tabs = [
-    { id: 'history', label: 'History', icon: '📊' },
-    { id: 'today', label: 'Today', icon: '🏋️' },
-    ...(showAdminTab ? [{ id: 'admin', label: 'Admin', icon: '⚙️' }] : [])
+    { id: 'history', label: 'History' },
+    { id: 'today', label: 'Today' },
+    ...(showAdminTab ? [{ id: 'admin', label: 'Admin' }] : [])
   ];
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-black via-slate-950 to-slate-900 flex items-center justify-center">
-        <div className="text-slate-400 text-lg">Loading...</div>
+      <div style={{ ...styles.app, alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ color: colors.text.tertiary, fontSize: 16 }}>Loading...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-slate-950 to-slate-900 overflow-x-hidden">
-      <div className="max-w-6xl mx-auto px-4 py-6">
-        {/* Minimal Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-600">
-              💪 SYNERGY 12
-            </h1>
+    <div style={styles.app}>
+      {/* ═══════════════════════════════════════════════ */}
+      {/* STICKY TOP SECTION                             */}
+      {/* ═══════════════════════════════════════════════ */}
+      <div style={styles.stickyTop}>
+        <header style={styles.header}>
+          <div style={styles.headerLeft}>
+            <h1 style={styles.title}>SYNERGY 12</h1>
+            <p style={styles.subtitle}>12-day training cycle</p>
+          </div>
+          <div style={styles.headerRight}>
+            <UserProfile />
             {showAdminTab && (
-              <div className="inline-flex items-center gap-2 px-3 py-1 bg-yellow-900/20 border border-yellow-700/50 rounded-lg">
-                <span className="text-yellow-400 text-xs font-bold">⚡ ADMIN</span>
+              <div style={styles.adminBadge}>
+                <span style={{ color: colors.accent.amber, fontSize: 11, fontWeight: 'bold' }}>ADMIN</span>
               </div>
             )}
-          </div>
-          <div className="flex items-center gap-4">
-            <UserProfile />
-            <div className="text-right">
-              <div className="text-xs text-slate-500 font-mono">
-                Build: {__BUILD_NUMBER__}
-              </div>
+            <div style={{ fontSize: 10, color: colors.text.disabled, fontFamily: 'monospace' }}>
+              {__BUILD_NUMBER__}
             </div>
           </div>
+        </header>
+      </div>
+
+      {/* ═══════════════════════════════════════════════ */}
+      {/* MAIN CONTENT                                   */}
+      {/* ═══════════════════════════════════════════════ */}
+      <div style={styles.main}>
+        {/* Left sidebar: vertical tabs */}
+        <div style={styles.leftSidebar}>
+          <TabBar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
         </div>
 
-        {/* Tab Navigation */}
-        <div className="bg-slate-900/60 backdrop-blur-md rounded-t-2xl border-b-2 border-slate-700/50 p-3">
-          <div className="flex gap-3">
-            {tabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`
-                  flex items-center gap-3 px-8 py-4 rounded-xl font-black uppercase tracking-wider transition-all duration-300
-                  ${activeTab === tab.id
-                    ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-2xl shadow-blue-500/50 scale-105'
-                    : 'bg-slate-800/40 text-slate-500 hover:bg-slate-700/60 hover:text-slate-300 border border-slate-700'
-                  }
-                `}
-              >
-                <span className="text-2xl">{tab.icon}</span>
-                <span className="text-sm">{tab.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Tab Content */}
-        <div className="bg-slate-900/40 backdrop-blur-md rounded-b-2xl border border-t-0 border-slate-700/50 p-8 min-h-[600px]">
+        {/* Tab content area */}
+        <div style={styles.tabContent}>
           {activeTab === 'today' && (
-            <div className="animate-fadeIn">
-              <TodayTab currentDay={currentDay} onDayChange={setDay} isAdmin={isAdmin} />
-            </div>
+            <TodayTab currentDay={currentDay} onDayChange={setDay} isAdmin={isAdmin} />
           )}
 
           {activeTab === 'history' && (
-            <div className="animate-fadeIn">
-              <HistoryTab key={refreshKey} onDayClick={isAdmin ? handleOpenDrawer : undefined} />
-            </div>
+            <HistoryTab key={refreshKey} onDayClick={isAdmin ? handleOpenDrawer : undefined} />
           )}
 
           {activeTab === 'admin' && showAdminTab && (
-            <div className="animate-fadeIn space-y-8">
-              <DatabaseInit />
-            </div>
+            <DatabaseInit />
           )}
         </div>
-
       </div>
 
       {/* Workout Drawer — only available for admin */}
@@ -146,3 +129,88 @@ function App() {
 }
 
 export default App;
+
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
+
+const styles = {
+  app: {
+    height: '100vh',
+    backgroundColor: colors.bg.base,
+    color: colors.text.primary,
+    fontFamily: "'Segoe UI', 'Roboto', monospace",
+    padding: 0,
+    margin: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  stickyTop: {
+    flexShrink: 0,
+    zIndex: 160,
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '12px 24px',
+    backgroundColor: colors.bg.raised,
+    borderBottom: `1px solid ${colors.border.subtle}`,
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  headerLeft: {
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  headerRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+  },
+  title: {
+    margin: 0,
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text.primary,
+    fontFamily: 'monospace',
+    letterSpacing: -0.5,
+  },
+  subtitle: {
+    margin: '3px 0 0 0',
+    fontSize: 11,
+    color: colors.text.tertiary,
+    fontFamily: 'monospace',
+  },
+  adminBadge: {
+    padding: '2px 8px',
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    border: '1px solid rgba(245, 158, 11, 0.3)',
+    borderRadius: 4,
+  },
+  main: {
+    display: 'flex',
+    flexDirection: 'row',
+    flex: 1,
+    minHeight: 0,
+    width: '100%',
+  },
+  leftSidebar: {
+    flexShrink: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    backgroundColor: colors.bg.raised,
+    borderRight: `1px solid ${colors.border.subtle}`,
+  },
+  tabContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    flex: 1,
+    minWidth: 0,
+    minHeight: 0,
+    padding: '12px 24px',
+    boxSizing: 'border-box',
+    overflowY: 'auto',
+  },
+};

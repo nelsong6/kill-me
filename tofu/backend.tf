@@ -5,7 +5,7 @@
 # The backend runs as a Container App with a system-assigned managed identity.
 # This identity gets role assignments for:
 #   1. Cosmos DB Data Contributor (read/write workout data)
-#   2. App Configuration Data Reader (fetch Microsoft OAuth config at startup)
+#   2. App Configuration Data Reader (fetch Microsoft OAuth client ID at startup)
 #   3. Key Vault Secrets User (fetch JWT signing secret)
 #
 # Custom domain setup follows Azure's three-step dance:
@@ -58,10 +58,6 @@ resource "azurerm_container_app" "workout_api" {
         value = "https://${data.azurerm_key_vault.main.name}.vault.azure.net"
       }
 
-      env {
-        name  = "MICROSOFT_CLIENT_ID"
-        value = azuread_application.microsoft_login.client_id
-      }
     }
 
     min_replicas = 0 # Scale to zero when not in use

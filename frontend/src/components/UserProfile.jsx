@@ -1,5 +1,6 @@
 import { useAuth } from '../auth/AuthContext.jsx';
 import { loginWithMicrosoft } from '../auth/msal.js';
+import { colors } from '../colors';
 
 export function UserProfile() {
   const { user, isAdmin, logout } = useAuth();
@@ -8,7 +9,9 @@ export function UserProfile() {
     return (
       <button
         onClick={loginWithMicrosoft}
-        className="inline-flex items-center gap-3 px-3 py-2 rounded border border-slate-600 bg-slate-800/50 text-slate-300 text-sm font-semibold cursor-pointer hover:bg-slate-700/50 transition-all"
+        style={styles.signInButton}
+        onMouseEnter={e => { e.currentTarget.style.backgroundColor = colors.bg.overlay; }}
+        onMouseLeave={e => { e.currentTarget.style.backgroundColor = colors.bg.surface; }}
       >
         <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 21 21">
           <rect x="1" y="1" width="9" height="9" fill="#F25022" />
@@ -22,22 +25,84 @@ export function UserProfile() {
   }
 
   return (
-    <div className="flex items-center gap-3">
-      <div className="w-8 h-8 rounded-full bg-cyan-900/50 border-2 border-cyan-500/50 flex items-center justify-center text-xs font-semibold text-cyan-300">
+    <div style={styles.container}>
+      <div style={styles.avatar}>
         {user.name?.charAt(0).toUpperCase()}
       </div>
-      <span className="text-slate-400 text-sm font-medium hidden md:block">{user.name}</span>
+      <span style={styles.name}>{user.name}</span>
       {!isAdmin && (
-        <span className="text-xs text-amber-400 bg-amber-900/30 border border-amber-700/50 px-2 py-0.5 rounded">
-          View only
-        </span>
+        <span style={styles.viewOnly}>View only</span>
       )}
       <button
         onClick={logout}
-        className="text-xs font-bold uppercase tracking-wide text-slate-500 hover:text-slate-200 bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700 hover:border-slate-600 px-3 py-1.5 rounded-lg transition-all"
+        style={styles.signOutButton}
+        onMouseEnter={e => { e.currentTarget.style.backgroundColor = colors.bg.overlay; }}
+        onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
       >
         Sign Out
       </button>
     </div>
   );
 }
+
+const styles = {
+  signInButton: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '6px 12px',
+    borderRadius: 4,
+    border: `1px solid ${colors.border.strong}`,
+    backgroundColor: colors.bg.surface,
+    color: colors.text.secondary,
+    fontSize: 13,
+    fontWeight: 600,
+    fontFamily: 'monospace',
+    cursor: 'pointer',
+  },
+  container: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+  },
+  avatar: {
+    width: 28,
+    height: 28,
+    borderRadius: '50%',
+    backgroundColor: 'rgba(34, 211, 238, 0.1)',
+    border: `2px solid rgba(34, 211, 238, 0.3)`,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 11,
+    fontWeight: 600,
+    color: colors.accent.cyan,
+  },
+  name: {
+    color: colors.text.tertiary,
+    fontSize: 12,
+    fontFamily: 'monospace',
+  },
+  viewOnly: {
+    fontSize: 10,
+    color: colors.accent.amber,
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    border: '1px solid rgba(245, 158, 11, 0.3)',
+    padding: '2px 6px',
+    borderRadius: 3,
+    fontFamily: 'monospace',
+  },
+  signOutButton: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    color: colors.text.tertiary,
+    backgroundColor: 'transparent',
+    border: `1px solid ${colors.border.subtle}`,
+    padding: '4px 10px',
+    borderRadius: 4,
+    cursor: 'pointer',
+    fontFamily: 'monospace',
+  },
+};
