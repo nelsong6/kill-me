@@ -45,7 +45,7 @@ export function SorenessTab({ isAdmin }) {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { fetchSoreness } = useDataSource();
+  const { fetchSoreness, isReady } = useDataSource();
 
   // Editor state
   const [editing, setEditing] = useState(false);
@@ -60,8 +60,9 @@ export function SorenessTab({ isAdmin }) {
 
   // Fetch entries
   useEffect(() => {
+    if (!isReady) return;
     loadEntries();
-  }, []);
+  }, [isReady]);
 
   async function loadEntries() {
     try {

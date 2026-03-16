@@ -34,7 +34,7 @@ export function TodayTab({ currentDay, isAdmin }) {
   const [logging, setLogging] = useState(false);
   const [success, setSuccess] = useState(false);
   const [completedExercises, setCompletedExercises] = useState([]);
-  const { fetchWorkoutDay, fetchExercises } = useDataSource();
+  const { fetchWorkoutDay, fetchExercises, isReady } = useDataSource();
 
   // Sync selectedDay if currentDay changes externally (e.g. after logging advances it)
   useEffect(() => {
@@ -43,6 +43,8 @@ export function TodayTab({ currentDay, isAdmin }) {
 
   // Fetch workout day info and exercises when selectedDay changes
   useEffect(() => {
+    if (!isReady) return;
+
     const fetchData = async () => {
       setLoading(true);
       try {
@@ -72,7 +74,7 @@ export function TodayTab({ currentDay, isAdmin }) {
       fetchData();
       setSuccess(false);
     }
-  }, [selectedDay]);
+  }, [selectedDay, isReady]);
 
   const handleQuickLog = async () => {
     setLogging(true);

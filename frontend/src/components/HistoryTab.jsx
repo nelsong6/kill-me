@@ -28,11 +28,12 @@ export function HistoryTab({ onDayClick }) {
   );
   // Hover state: tracks which workout type is currently being hovered
   const [hoveredWorkoutType, setHoveredWorkoutType] = useState(null);
-  const { fetchWorkouts: fetchWorkoutsFromSource } = useDataSource();
+  const { fetchWorkouts: fetchWorkoutsFromSource, isReady } = useDataSource();
 
   useEffect(() => {
+    if (!isReady) return;
     loadWorkouts();
-  }, []);
+  }, [isReady]);
 
   const loadWorkouts = async () => {
     setLoading(true);
