@@ -4,19 +4,15 @@
 //   - Quick: one-tap "complete workout" — records that the day was done
 //   - Detailed: exercise checklist with weight/reps/sets input per exercise
 //
-// The day override toggle lets the user manually switch to a different day
-// without advancing the cycle. This is useful when life doesn't follow the
-// linear cycle order (e.g., gym-only exercises need to wait for a gym day).
+// Day override lives in CycleTab, not here.
 //
-// Fetches workout day definitions and exercises from the backend (not from
-// the static dayConfig.js — that's only used for the override dropdown labels).
+// Fetches workout day definitions and exercises from the backend.
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { DAY_CONFIG } from '../utils/dayConfig';
 import { apiFetch } from '../api/client.js';
 
-export function TodayTab({ currentDay, onDayChange, isAdmin }) {
+export function TodayTab({ currentDay, isAdmin }) {
   const [mode, setMode] = useState('quick'); // 'quick' or 'detailed'
   const [workoutDay, setWorkoutDay] = useState(null);
   const [exercises, setExercises] = useState([]);
@@ -27,10 +23,6 @@ export function TodayTab({ currentDay, onDayChange, isAdmin }) {
   // Detailed mode state
   const [completedExercises, setCompletedExercises] = useState([]);
   
-  // Override mode state
-  const [overrideEnabled, setOverrideEnabled] = useState(false);
-  const [selectedDay, setSelectedDay] = useState(currentDay);
-
   // Fetch workout day info and exercises
   useEffect(() => {
     const fetchData = async () => {
@@ -64,7 +56,6 @@ export function TodayTab({ currentDay, onDayChange, isAdmin }) {
     if (currentDay) {
       fetchData();
       setSuccess(false);
-      setSelectedDay(currentDay);
     }
   }, [currentDay]);
 
@@ -131,16 +122,6 @@ export function TodayTab({ currentDay, onDayChange, isAdmin }) {
       updated[index] = { ...updated[index], [field]: value };
       return updated;
     });
-  };
-
-  const handleOverrideToggle = () => {
-    setOverrideEnabled(!overrideEnabled);
-  };
-
-  const handleDaySelect = (e) => {
-    const day = parseInt(e.target.value);
-    setSelectedDay(day);
-    onDayChange(day);
   };
 
   if (loading) {
@@ -221,64 +202,6 @@ export function TodayTab({ currentDay, onDayChange, isAdmin }) {
             ))}
           </div>
         )}
-      </div>
-
-      {/* Override Controls */}
-      <div className="bg-slate-800/30 backdrop-blur-md rounded-xl border border-slate-700/50 p-6">
-        <div className="space-y-4">
-          <button
-            onClick={handleOverrideToggle}
-            className={`w-full py-3 px-6 rounded-lg font-bold uppercase tracking-wide transition-all ${
-              overrideEnabled
-                ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-500/30'
-                : 'bg-slate-700/60 hover:bg-slate-600/60 text-slate-300'
-            }`}
-          >
-            {overrideEnabled ? '🔓 Override Active' : '🔒 Enable Day Override'}
-          </button>
-          
-          <div className="relative">
-            <select
-              value={selectedDay}
-              onChange={handleDaySelect}
-              disabled={!overrideEnabled}
-              className={`w-full px-4 py-3 rounded-lg font-medium transition-all appearance-none cursor-pointer ${
-                overrideEnabled
-                  ? 'bg-slate-700 border-2 border-cyan-500/50 text-slate-200 hover:border-cyan-400 focus:outline-none focus:border-cyan-400'
-                  : 'bg-slate-800/50 border border-slate-700/30 text-slate-600 cursor-not-allowed'
-              }`}
-              style={{ paddingRight: '2.5rem' }}
-            >
-              {Object.entries(DAY_CONFIG).map(([dayNum, dayInfo]) => (
-                <option key={dayNum} value={dayNum}>
-                  Day {dayNum}: {dayInfo.name}
-                </option>
-              ))}
-            </select>
-            <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
-              <svg 
-                className={`w-5 h-5 ${overrideEnabled ? 'text-cyan-400' : 'text-slate-600'}`}
-                fill="none" 
-                stroke="currentColor" 
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </div>
-          </div>
-          
-          {overrideEnabled && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-3 text-center"
-            >
-              <p className="text-amber-300 text-sm font-medium">
-                ⚠️ Manual day override is active
-              </p>
-            </motion.div>
-          )}
-        </div>
       </div>
 
       {/* Mode Toggle — admin only */}

@@ -1,13 +1,16 @@
-// Admin-only panel for initializing the Cosmos DB database and seeding it.
+// Admin-only panel for initializing the Cosmos DB database and seeding it,
+// plus day override controls for manually changing the current cycle day.
 // Calls POST /api/admin/init-database which creates the database/container
 // if they don't exist and upserts seed data. Only visible in admin mode
 // (localhost + dev). The backend uses DefaultAzureCredential, so the developer
 // must be logged into Azure CLI (`az login`) for this to work locally.
 
 import { useState } from 'react';
+import { motion } from 'framer-motion';
 import { apiFetch } from '../api/client.js';
+import { DAY_CONFIG } from '../utils/dayConfig';
 
-export function DatabaseInit() {
+export function DatabaseInit({ currentDay, onDayChange }) {
   const [status, setStatus] = useState('idle'); // idle, initializing, success, error
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -33,8 +36,83 @@ export function DatabaseInit() {
     }
   };
 
+  const [overrideEnabled, setOverrideEnabled] = useState(false);
+  const [selectedDay, setSelectedDay] = useState(currentDay);
+
+  const handleDaySelect = (e) => {
+    const day = parseInt(e.target.value);
+    setSelectedDay(day);
+    onDayChange(day);
+  };
+
   return (
     <div className="space-y-6">
+      {/* Day Override */}
+      <div>
+        <h2 className="text-3xl font-black text-cyan-400 mb-2">
+          Day Override
+        </h2>
+        <p className="text-slate-400 mb-4">
+          Manually change the current day in the 12-day cycle
+        </p>
+        <div className="bg-slate-800/30 backdrop-blur-md rounded-xl border border-slate-700/50 p-6">
+          <div className="space-y-4">
+            <button
+              onClick={() => setOverrideEnabled(!overrideEnabled)}
+              className={`w-full py-3 px-6 rounded-lg font-bold uppercase tracking-wide transition-all ${
+                overrideEnabled
+                  ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-lg shadow-amber-500/30'
+                  : 'bg-slate-700/60 hover:bg-slate-600/60 text-slate-300'
+              }`}
+            >
+              {overrideEnabled ? '🔓 Override Active' : '🔒 Enable Day Override'}
+            </button>
+
+            <div className="relative">
+              <select
+                value={selectedDay}
+                onChange={handleDaySelect}
+                disabled={!overrideEnabled}
+                className={`w-full px-4 py-3 rounded-lg font-medium transition-all appearance-none cursor-pointer ${
+                  overrideEnabled
+                    ? 'bg-slate-700 border-2 border-cyan-500/50 text-slate-200 hover:border-cyan-400 focus:outline-none focus:border-cyan-400'
+                    : 'bg-slate-800/50 border border-slate-700/30 text-slate-600 cursor-not-allowed'
+                }`}
+                style={{ paddingRight: '2.5rem' }}
+              >
+                {Object.entries(DAY_CONFIG).map(([dayNum, dayInfo]) => (
+                  <option key={dayNum} value={dayNum}>
+                    Day {dayNum}: {dayInfo.name}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-4 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                <svg
+                  className={`w-5 h-5 ${overrideEnabled ? 'text-cyan-400' : 'text-slate-600'}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </div>
+
+            {overrideEnabled && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-3 text-center"
+              >
+                <p className="text-amber-300 text-sm font-medium">
+                  ⚠️ Manual day override is active
+                </p>
+              </motion.div>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Header */}
       <div>
         <h2 className="text-3xl font-black text-cyan-400 mb-2">
@@ -240,7 +318,7 @@ export function DatabaseInit() {
           <div>
             <p className="font-bold text-slate-300 mb-1">2. Check API is Running</p>
             <code className="block bg-slate-950 p-2 rounded text-cyan-400">
-              curl {API_URL}/health
+              {"curl http://localhost:3000/health"}
             </code>
           </div>
           

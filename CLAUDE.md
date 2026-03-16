@@ -54,6 +54,7 @@ backend/           Express.js API (Node 20)
   ├── Self-signed JWT auth (Microsoft ID token exchange)
   ├── Azure Cosmos DB NoSQL for storage
   ├── Azure App Configuration + Key Vault for runtime config
+  ├── CORS via Express middleware (local dev only; production uses infra-level CORS)
   ├── Deployed as Azure Container App
   └── Managed identity for all Azure service access
 
@@ -156,6 +157,19 @@ via Vite's `define` config.
 
 ## Change Log
 
+### 2026-03-15 (session 4)
+
+- **Moved day override from Cycle tab to Admin tab** — the override toggle and day dropdown were in `CycleTab.jsx` but belong with other admin tools. Moved override state, toggle button, and dropdown to `DatabaseInit.jsx`. `CycleTab` no longer takes `onDayChange` or `isAdmin` props. `App.jsx` now passes `currentDay` and `onDayChange` to `DatabaseInit`.
+- **Fixed History calendar Next button stuck** — `hasWorkoutsInFuture()` in `HistoryTab.jsx` only enabled the Next button if logged workouts existed beyond the current viewing period. This meant navigating forward to the current month was impossible if no workouts were logged there yet (e.g., viewing February with no March data). Added a check that always allows forward navigation when the viewed period's end is still in the past, so users can always reach the current month.
+
+### 2026-03-15 (session 3)
+
+- **Moved day override from Today tab to Cycle tab** — the override toggle and day dropdown were in `TodayTab.jsx` but conceptually belong in the Cycle tab where the full 12-day breakdown is visible. Moved override state, toggle button, and dropdown to `CycleTab.jsx` (admin-only). Removed `onDayChange` prop and `DAY_CONFIG` import from `TodayTab`. `App.jsx` now passes `onDayChange` and `isAdmin` to `CycleTab` instead of `TodayTab`.
+
+### 2026-03-15 (session 2)
+
+- **Added Cycle tab to left sidebar** — new tab (`CycleTab.jsx`) between Today and Log that displays the full Synergy 12 system: three guiding principles, all 12 days with names/focus/descriptions, recovery sequencing rationale for key days, safety callouts (Day 8 shoulder, Day 10 pushdown preference), and CNS-aware compound day highlighting (Days 1, 5, 9). The current day is highlighted in green with a "Next" badge so it's immediately obvious which workout is up next. Public tab — no auth required, renders from static `dayConfig.js`. Receives `currentDay` from `App.jsx`. Also hosts day override controls (admin-only).
+
 ### 2026-03-16
 
 - **Fixed loading screen hang on MSAL failure** — `AuthContext.jsx` had no error handling around `msalReady` / `handleRedirectPromise()`. If MSAL initialization failed (e.g., missing client ID), the error was silently swallowed and `setLoading(false)` never ran, leaving the app stuck on "Loading..." forever. Wrapped in try/catch/finally so the app always progresses past the loading state.
@@ -166,6 +180,8 @@ via Vite's `define` config.
 - **Added `ignore_changes` for container image in tofu** — the deploy workflow sets the image tag to a commit SHA via `az containerapp update`, but tofu had `image = "...latest"` which doesn't exist in GHCR. Without `ignore_changes`, every tofu apply tried to reset the tag and failed with `MANIFEST_UNKNOWN`.
 - **Left sidebar tab navigation** — replaced horizontal top tabs (Tailwind) with vertical left sidebar `TabBar` component using inline styles, matching the bender-world/eight-queens pattern. Added centralized `colors.js` palette. Converted `App.jsx` and `UserProfile.jsx` from Tailwind classes to inline styles. App shell is now: sticky header → flex row (sidebar + scrollable content).
 - **Moved Microsoft client ID to App Config** — backend was reading `MICROSOFT_CLIENT_ID` from a Container App env var (set by tofu). Moved to Azure App Configuration as `workout:microsoft_client_id`, written by a new `azurerm_app_configuration_key` resource in tofu. Backend `appConfig.js` now fetches it from App Config alongside other settings. Removed the env var from the Container App template.
+- **Added CORS middleware for local dev** — the `cors` npm package was installed but never imported. In production, CORS is handled at the Azure Container App infra level, but locally Express is hit directly from `localhost:5173` → `localhost:3000`, causing "Failed to fetch" on cross-origin requests (e.g., the admin init-database button). Added `cors()` middleware gated behind `NODE_ENV !== 'production'` so it only applies in local dev.
+- **Fixed admin tab white screen** — clicking the admin button crashed the app to a white screen. `DatabaseInit.jsx` line 243 referenced `{API_URL}` as a JSX expression in a troubleshooting `<code>` block, but `API_URL` was never imported or defined in the component (it's a non-exported const in `client.js`). React threw a `ReferenceError` during render, and with no error boundary the entire app unmounted. Replaced with a string literal since the admin panel only renders on localhost in dev mode.
 
 ### 2026-03-15
 
@@ -185,3 +201,5 @@ via Vite's `define` config.
 - **Modernized remote-state.tf** — replaced hardcoded ARM resource IDs with `azurerm_*` data source lookups for Cosmos DB, Container App Environment, and App Configuration. Updated all downstream references in `backend.tf`, `db.tf`, `appconfig.tf`, `outputs.tf`, and `keyvault.tf`.
 - **Removed root-level npm artifacts** — deleted root `package.json`, `package-lock.json`, and `node_modules/`. The root package existed only to provide `concurrently` for running both servers. Replaced with a `dev` shell function in shell-config that auto-detects `backend/`+`frontend/` dirs, installs deps if `node_modules` is missing, and runs both servers concurrently.
 - **Added backend `.env`** — created `backend/.env` with `AZURE_APP_CONFIG_ENDPOINT` and `APP_CONFIG_PREFIX` for local development (gitignored).
+- **Converted workout drawer to Log tab** — the slide-in `WorkoutDrawer` panel (fixed-position right drawer with framer-motion animations, "New Workout" button, ESC handler, body scroll lock) was being clipped by the sticky title bar. Instead of fixing the overlap, converted it to a "Log" tab in the left sidebar, rendering inline as tab content. Renamed export to `LogTab` (file still `WorkoutDrawer.jsx`). Calendar day clicks in HistoryTab now switch to the Log tab with pre-filled day/date. After a successful log, auto-navigates back to History. The Log tab is admin-only.
+- **Shrunk history calendar month view cells** — month view cells in `HistoryTab.jsx` used `aspect-square`, which made them excessively tall on wide screens. Replaced with fixed `h-20` (80px) on both day cells and empty padding cells for a compact calendar that doesn't dominate the page.

@@ -36,5 +36,5 @@ export const useWorkouts = () => {
     }
   };
 
-  return { currentDay, setDay };
+  return { currentDay, setDay, setCurrentDay };
 };

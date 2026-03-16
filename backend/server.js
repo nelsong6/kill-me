@@ -15,6 +15,7 @@
 
 import 'dotenv/config';
 import express from 'express';
+import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { CosmosClient } from '@azure/cosmos';
@@ -31,6 +32,9 @@ const LEGACY_USER_ID = 'cf57d57d-1411-4f59-b517-e9a8600b140a';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+if (process.env.NODE_ENV !== 'production') {
+  app.use(cors());
+}
 app.use(helmet());
 app.use(express.json());
 app.use(morgan('combined'));
@@ -206,7 +210,27 @@ async function startServer() {
 
       const { resource } = await container.items.create(workoutDoc);
 
-      res.status(201).json({ workout: resource });
+      // Auto-advance currentDay if the logged workout matches the current day
+      let advancedTo = null;
+      const { resources: settings } = await container.items.query({
+        query: 'SELECT * FROM c WHERE c.type = @type',
+        parameters: [{ name: '@type', value: 'settings' }]
+      }).fetchAll();
+      const currentDay = settings[0]?.currentDay || 1;
+      if (dayNumber === currentDay) {
+        const nextDay = currentDay >= 12 ? 1 : currentDay + 1;
+        await container.items.upsert({
+          ...settings[0],
+          id: settings[0]?.id || `settings_${userId}`,
+          userId,
+          type: 'settings',
+          currentDay: nextDay,
+          updatedAt: new Date().toISOString()
+        });
+        advancedTo = nextDay;
+      }
+
+      res.status(201).json({ workout: resource, advancedTo });
     } catch (error) {
       console.error('Error logging workout:', error);
       res.status(500).json({ error: 'Failed to log workout', message: error.message });

@@ -95,6 +95,9 @@ export function HistoryTab({ onDayClick }) {
       endOfCurrentPeriod.setDate(0); // Last day of year
     }
     
+    // Always allow navigating forward up to the current date
+    if (endOfCurrentPeriod < new Date()) return true;
+
     return workouts.some(w => {
       const workoutDate = new Date(w.date);
       return workoutDate > endOfCurrentPeriod;
@@ -395,7 +398,7 @@ export function HistoryTab({ onDayClick }) {
 
                 // Empty cells for days before month starts
                 for (let i = 0; i < startingDayOfWeek; i++) {
-                  days.push(<div key={`empty-${i}`} className="aspect-square" />);
+                  days.push(<div key={`empty-${i}`} className="h-20" />);
                 }
 
                 // Days of the month
@@ -408,7 +411,7 @@ export function HistoryTab({ onDayClick }) {
                     <div
                       key={day}
                       onClick={() => onDayClick?.(dayWorkouts.length > 0 ? dayWorkouts[0].dayNumber : null, date.toISOString().split('T')[0])}
-                      className={`aspect-square rounded-lg border transition-all overflow-hidden cursor-pointer hover:scale-105 ${
+                      className={`h-20 rounded-lg border transition-all overflow-hidden cursor-pointer hover:scale-105 ${
                         isToday
                           ? 'border-cyan-500 shadow-lg shadow-cyan-500/20'
                           : 'border-slate-700 hover:border-slate-600'

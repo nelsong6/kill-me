@@ -1,12 +1,13 @@
 // Root application component. Left sidebar tab navigation (matches bender-world /
-// eight-queens pattern). Three tabs:
+// eight-queens pattern). Tabs:
 //   - History (default): calendar/list view of past workouts with color-coded days
 //   - Today: shows current day in the 12-day cycle with quick/detailed logging
-//   - Admin (localhost only + admin role): database init and data migration
+//   - Cycle: Synergy 12 overview — philosophy, day breakdown, recovery notes
+//   - Log (admin only): log a workout with quick or detailed mode
+//   - Admin (localhost only + admin role): day override, database init and data migration
 //
 // Auth model: anyone can view (History/Today tabs load publicly). Only the
-// admin user (whitelisted Microsoft email) sees logging buttons, the workout
-// drawer, and the admin tab.
+// admin user (whitelisted Microsoft email) sees the Log tab and the Admin tab.
 
 import { useState } from 'react';
 import { useWorkouts } from './hooks/useWorkouts';
@@ -14,43 +15,46 @@ import { useAuth } from './auth/AuthContext.jsx';
 import { TodayTab } from './components/TodayTab';
 import { HistoryTab } from './components/HistoryTab';
 import { DatabaseInit } from './components/DatabaseInit';
-import { WorkoutDrawer } from './components/WorkoutDrawer';
+import { LogTab } from './components/WorkoutDrawer';
 import { UserProfile } from './components/UserProfile';
 import { TabBar } from './components/TabBar';
+import { CycleTab } from './components/CycleTab';
 import { isAdminMode } from './utils/adminMode';
 import { colors } from './colors';
 
 function App() {
   const [activeTab, setActiveTab] = useState('history');
   const { isAdmin, loading } = useAuth();
-  const { currentDay, setDay } = useWorkouts();
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [drawerInitialDay, setDrawerInitialDay] = useState(null);
-  const [drawerInitialDate, setDrawerInitialDate] = useState(null);
+  const { currentDay, setDay, setCurrentDay } = useWorkouts();
+  const [logInitialDay, setLogInitialDay] = useState(null);
+  const [logInitialDate, setLogInitialDate] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   // Admin tab requires both localhost dev mode AND admin role
   const showAdminTab = isAdminMode() && isAdmin;
 
-  const handleOpenDrawer = (dayNumber = null, date = null) => {
-    setDrawerInitialDay(dayNumber);
-    setDrawerInitialDate(date);
-    setDrawerOpen(true);
+  // Navigate to Log tab, optionally pre-filling day/date (e.g. from calendar click)
+  const handleOpenLog = (dayNumber = null, date = null) => {
+    setLogInitialDay(dayNumber);
+    setLogInitialDate(date);
+    setActiveTab('log');
   };
 
-  const handleCloseDrawer = () => {
-    setDrawerOpen(false);
-    setDrawerInitialDay(null);
-    setDrawerInitialDate(null);
-  };
-
-  const handleWorkoutSuccess = () => {
+  const handleWorkoutSuccess = (advancedTo) => {
+    if (advancedTo) {
+      setCurrentDay(advancedTo);
+    }
     setRefreshKey(prev => prev + 1);
+    setLogInitialDay(null);
+    setLogInitialDate(null);
+    setActiveTab('history');
   };
 
   const tabs = [
     { id: 'history', label: 'History' },
     { id: 'today', label: 'Today' },
+    { id: 'cycle', label: 'Cycle' },
+    ...(isAdmin ? [{ id: 'log', label: 'Log' }] : []),
     ...(showAdminTab ? [{ id: 'admin', label: 'Admin' }] : [])
   ];
 
@@ -99,31 +103,31 @@ function App() {
         {/* Tab content area */}
         <div style={styles.tabContent}>
           {activeTab === 'today' && (
-            <TodayTab currentDay={currentDay} onDayChange={setDay} isAdmin={isAdmin} />
+            <TodayTab currentDay={currentDay} isAdmin={isAdmin} />
           )}
 
           {activeTab === 'history' && (
-            <HistoryTab key={refreshKey} onDayClick={isAdmin ? handleOpenDrawer : undefined} />
+            <HistoryTab key={refreshKey} onDayClick={isAdmin ? handleOpenLog : undefined} />
+          )}
+
+          {activeTab === 'cycle' && (
+            <CycleTab currentDay={currentDay} />
+          )}
+
+          {activeTab === 'log' && isAdmin && (
+            <LogTab
+              initialDay={logInitialDay}
+              initialDate={logInitialDate}
+              currentDay={currentDay}
+              onSuccess={handleWorkoutSuccess}
+            />
           )}
 
           {activeTab === 'admin' && showAdminTab && (
-            <DatabaseInit />
+            <DatabaseInit currentDay={currentDay} onDayChange={setDay} />
           )}
         </div>
       </div>
-
-      {/* Workout Drawer — only available for admin */}
-      {isAdmin && (
-        <WorkoutDrawer
-          isOpen={drawerOpen}
-          onClose={handleCloseDrawer}
-          initialDay={drawerInitialDay}
-          initialDate={drawerInitialDate}
-          currentDay={currentDay}
-          onSuccess={handleWorkoutSuccess}
-          onOpenDrawer={handleOpenDrawer}
-        />
-      )}
     </div>
   );
 }

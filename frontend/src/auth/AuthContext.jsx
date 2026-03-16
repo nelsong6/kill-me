@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { msalInstance, msalReady } from './msal';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
@@ -36,8 +36,21 @@ export function AuthProvider({ children }) {
     }
   }, [token]);
 
-  // Handle MSAL redirect response (runs on any page after Microsoft redirects back)
+  // Handle MSAL redirect response (runs on any page after Microsoft redirects back).
+  // Guard with a ref to prevent StrictMode double-fire from calling
+  // handleRedirectPromise() twice — concurrent calls cause MSAL to hang.
+  const redirectHandled = useRef(false);
   useEffect(() => {
+    if (redirectHandled.current) return;
+    redirectHandled.current = true;
+
+    // Timeout fallback — if MSAL hangs (token exchange stall, network issue),
+    // force past the loading screen so the app is still usable as a viewer.
+    const timeout = setTimeout(() => {
+      console.warn('Auth initialization timed out — continuing without auth');
+      setLoading(false);
+    }, 8000);
+
     (async () => {
       try {
         await msalReady;
@@ -65,6 +78,7 @@ export function AuthProvider({ children }) {
       } catch (err) {
         console.error('MSAL initialization failed:', err);
       } finally {
+        clearTimeout(timeout);
         setLoading(false);
       }
     })();

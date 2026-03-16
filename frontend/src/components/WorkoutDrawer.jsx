@@ -1,24 +1,20 @@
-// Slide-in drawer from the right edge for logging workouts.
-//
-// The drawer can be opened two ways:
-//   1. The persistent "New Workout" tab button (always visible in top-right)
-//   2. Clicking a day in the HistoryTab calendar (pre-fills day type and date)
+// Log tab — renders inline as tab content for logging workouts.
 //
 // The flipper toggle is a vertical switch that controls which workout day to log:
 //   - "Next" (top position): uses the current day in the cycle
 //   - "Pick" (bottom position): dropdown to select any of the other 11 days
-// When opened from the calendar with a specific day, the flipper auto-sets to
-// "Pick" mode with that day pre-selected.
+// When navigated to from the calendar with a specific day, the flipper auto-sets
+// to "Pick" mode with that day pre-selected.
 //
 // Date picker defaults to today but allows backdating — useful for logging a
 // workout that happened yesterday or earlier.
 
 import { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { getDayInfo, DAY_CONFIG } from '../utils/dayConfig';
 import { apiFetch } from '../api/client.js';
 
-export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate = null, onSuccess, onOpenDrawer, currentDay = 1 }) {
+export function LogTab({ initialDay = null, initialDate = null, onSuccess, currentDay = 1 }) {
   const [selectedDay, setSelectedDay] = useState(initialDay || currentDay);
   const [selectedDate, setSelectedDate] = useState(initialDate || new Date().toISOString().split('T')[0]);
   const [mode, setMode] = useState('quick'); // 'quick' or 'detailed'
@@ -38,65 +34,31 @@ export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate 
 
   const dayInfo = getDayInfo(selectedDay);
 
-  // Reset state when drawer opens
+  // Reset state when initialDay/initialDate change (e.g. navigated from calendar)
   useEffect(() => {
-    if (isOpen) {
-      // Default to currentDay (next workout) unless initialDay is explicitly provided
-      if (initialDay) {
-        setSelectedDay(initialDay);
-        // If initialDay is not currentDay, set dropdown to that day and switch to "pick" mode
-        if (initialDay !== currentDay) {
-          setDropdownDay(initialDay);
-          setUseNextWorkout(false);
-        } else {
-          setUseNextWorkout(true);
-        }
+    if (initialDay) {
+      setSelectedDay(initialDay);
+      if (initialDay !== currentDay) {
+        setDropdownDay(initialDay);
+        setUseNextWorkout(false);
       } else {
-        setSelectedDay(currentDay);
         setUseNextWorkout(true);
       }
-      // Use initialDate if provided, otherwise default to today
-      setSelectedDate(initialDate || new Date().toISOString().split('T')[0]);
-      setMode('quick');
-      fetchExercises();
+    } else {
+      setSelectedDay(currentDay);
+      setUseNextWorkout(true);
     }
-  }, [isOpen, initialDay, initialDate, currentDay]);
-
-  // Prevent background scrolling when drawer is open
-  useEffect(() => {
-    if (isOpen) {
-      // Save the current overflow value
-      const originalOverflow = document.body.style.overflow;
-      // Prevent scrolling
-      document.body.style.overflow = 'hidden';
-      
-      // Cleanup: restore original overflow when drawer closes
-      return () => {
-        document.body.style.overflow = originalOverflow;
-      };
-    }
-  }, [isOpen]);
-
-  // Handle ESC key to close drawer
-  useEffect(() => {
-    const handleEscape = (e) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('keydown', handleEscape);
-      return () => document.removeEventListener('keydown', handleEscape);
-    }
-  }, [isOpen, onClose]);
+    setSelectedDate(initialDate || new Date().toISOString().split('T')[0]);
+    setMode('quick');
+    fetchExercises();
+  }, [initialDay, initialDate, currentDay]);
 
   // Fetch exercises when day changes
   useEffect(() => {
-    if (isOpen && selectedDay) {
+    if (selectedDay) {
       fetchExercises();
     }
-  }, [selectedDay, isOpen]);
+  }, [selectedDay]);
 
   const fetchExercises = async () => {
     setLoading(true);
@@ -123,7 +85,7 @@ export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate 
   const handleQuickLog = async () => {
     setLogging(true);
     try {
-      await apiFetch('/api/log-workout', {
+      const result = await apiFetch('/api/log-workout', {
         method: 'POST',
         body: JSON.stringify({
           dayNumber: selectedDay,
@@ -132,8 +94,7 @@ export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate 
           date: selectedDate
         })
       });
-      onSuccess?.();
-      onClose();
+      onSuccess?.(result.advancedTo);
     } catch (error) {
       console.error('Error logging workout:', error);
       alert('Failed to log workout. Please try again.');
@@ -152,7 +113,7 @@ export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate 
 
     setLogging(true);
     try {
-      await apiFetch('/api/log-workout', {
+      const result = await apiFetch('/api/log-workout', {
         method: 'POST',
         body: JSON.stringify({
           dayNumber: selectedDay,
@@ -162,8 +123,7 @@ export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate 
           date: selectedDate
         })
       });
-      onSuccess?.();
-      onClose();
+      onSuccess?.(result.advancedTo);
     } catch (error) {
       console.error('Error logging workout:', error);
       alert('Failed to log workout. Please try again.');
@@ -181,64 +141,14 @@ export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate 
   };
 
   return (
-    <>
-      {/* Add Workout Button - Folder Tab style, seamlessly attached to drawer panel */}
-      <motion.div
-        initial={false}
-        animate={{ 
-          x: isOpen ? -672 : 0  // Move left by drawer width (max-w-2xl = 42rem = 672px)
-        }}
-        transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-        className="fixed top-0 right-0 z-[60]"
-      >
-        <button
-          onClick={() => {
-            if (isOpen) {
-              onClose?.();
-            } else {
-              onOpenDrawer?.();
-            }
-          }}
-          className="bg-slate-900/95 backdrop-blur-md hover:bg-slate-900 text-white px-6 py-4 border-l-2 border-t-2 border-cyan-500/30 hover:border-cyan-400/50 rounded-tl-xl font-bold uppercase tracking-wider shadow-2xl shadow-cyan-500/20 hover:shadow-cyan-400/30 flex items-center gap-2 transition-all"
-          title={isOpen ? "Close Workout Panel" : "Log New Workout"}
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          <span>New Workout</span>
-        </button>
-      </motion.div>
-
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className="fixed right-0 top-0 h-full w-full max-w-2xl z-50"
-          >
-            {/* Drawer Panel - starts below the tab button */}
-            <div className="h-full bg-slate-900/95 backdrop-blur-md border-l-2 border-t-2 border-cyan-500/30 shadow-2xl overflow-hidden flex flex-col pt-14">
-              {/* Header - positioned under the tab */}
-              <div className="bg-gradient-to-r from-cyan-500/20 to-blue-600/20 border-b border-cyan-500/30 p-6 flex-shrink-0 -mt-14">
-                <div className="flex items-start justify-between mb-4">
-                  <div>
-                    <h2 className="text-4xl font-black text-cyan-400 uppercase tracking-wide mb-2">
-                      Log Workout
-                    </h2>
-                    <p className="text-slate-400">Track your training session</p>
-                  </div>
-                  <button
-                    onClick={onClose}
-                    className="text-slate-400 hover:text-white transition-colors p-2 hover:bg-slate-800/50 rounded-lg"
-                    title="Close (Esc)"
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
+    <div className="max-w-2xl">
+      {/* Header */}
+      <div className="mb-6">
+        <h2 className="text-4xl font-black text-cyan-400 uppercase tracking-wide mb-2">
+          Log Workout
+        </h2>
+        <p className="text-slate-400">Track your training session</p>
+      </div>
 
                 {/* Date Picker */}
                 <div className="mb-4">
@@ -423,10 +333,7 @@ export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate 
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Scrollable Content */}
-              <div className="flex-1 overflow-y-auto p-6">
                 {/* Selected Day Info */}
                 <div className="bg-slate-800/50 backdrop-blur-md rounded-xl border border-slate-700/50 p-6 mb-6">
                   <div className="flex items-start justify-between mb-3">
@@ -595,11 +502,6 @@ export function WorkoutDrawer({ isOpen, onClose, initialDay = null, initialDate 
                     )}
                   </div>
                 )}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </>
+    </div>
   );
 }
