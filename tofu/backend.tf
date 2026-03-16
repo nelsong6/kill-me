@@ -122,6 +122,13 @@ resource "azurerm_role_assignment" "container_app_appconfig_reader" {
   principal_id         = azurerm_container_app.workout_api.identity[0].principal_id
 }
 
+# Import the manually-created role assignment into state.
+# Remove this block after the first successful apply.
+import {
+  to = azurerm_role_assignment.container_app_keyvault_reader
+  id = "/subscriptions/aee0cbd2-8074-4001-b610-0f8edb4eaa3c/resourceGroups/infra/providers/Microsoft.KeyVault/vaults/romaine-kv/providers/Microsoft.Authorization/roleAssignments/b76fd73c-8496-4007-8c68-6c4f3af5018f"
+}
+
 # Grant Container App managed identity read access to Key Vault secrets (JWT signing secret)
 resource "azurerm_role_assignment" "container_app_keyvault_reader" {
   scope                = data.azurerm_key_vault.main.id
