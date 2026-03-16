@@ -53,14 +53,12 @@ jobs:
           CONTAINER_APP_NAME: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).container_app_name }}
           RESOURCE_GROUP_NAME: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).resource_group_name }}
           BACKEND_API_URL: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).backend_api_url }}
-          ACA_ENVIRONMENT_NAME: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).container_app_environment_name }}
         run: |
           BACKEND_HOSTNAME="${BACKEND_API_URL#https://}"
           az containerapp hostname bind \
             --hostname "$BACKEND_HOSTNAME" \
             --resource-group "$RESOURCE_GROUP_NAME" \
             --name "$CONTAINER_APP_NAME" \
-            --environment "$ACA_ENVIRONMENT_NAME" \
             --validation-method CNAME
 
   deploy-frontend:
