@@ -14,7 +14,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { DAY_CONFIG } from '../utils/dayConfig';
-import { apiFetch } from '../api/client.js';
+import { useDataSource } from '../api/snapshotContext.jsx';
 
 export function HistoryTab({ onDayClick }) {
   const [view, setView] = useState('calendar'); // 'calendar' or 'list'
@@ -28,15 +28,16 @@ export function HistoryTab({ onDayClick }) {
   );
   // Hover state: tracks which workout type is currently being hovered
   const [hoveredWorkoutType, setHoveredWorkoutType] = useState(null);
+  const { fetchWorkouts: fetchWorkoutsFromSource } = useDataSource();
 
   useEffect(() => {
-    fetchWorkouts();
+    loadWorkouts();
   }, []);
 
-  const fetchWorkouts = async () => {
+  const loadWorkouts = async () => {
     setLoading(true);
     try {
-      const data = await apiFetch('/api/logged-workouts');
+      const data = await fetchWorkoutsFromSource();
       setWorkouts(data.workouts || []);
     } catch (error) {
       console.error('Error fetching workouts:', error);

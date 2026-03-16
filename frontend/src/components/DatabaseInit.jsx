@@ -15,6 +15,9 @@ export function DatabaseInit({ currentDay, onDayChange }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
+  const [sorenessStatus, setSorenessStatus] = useState('idle');
+  const [sorenessResult, setSorenessResult] = useState(null);
+
   const handleInitialize = async () => {
     setStatus('initializing');
     setError(null);
@@ -33,6 +36,19 @@ export function DatabaseInit({ currentDay, onDayChange }) {
         stack: err.stack,
         name: err.name
       });
+    }
+  };
+
+  const handleSeedSoreness = async () => {
+    setSorenessStatus('initializing');
+    setSorenessResult(null);
+    try {
+      const data = await apiFetch('/api/admin/seed-soreness', { method: 'POST' });
+      setSorenessStatus('success');
+      setSorenessResult(data);
+    } catch (err) {
+      setSorenessStatus('error');
+      setSorenessResult({ error: err.message });
     }
   };
 
@@ -303,6 +319,58 @@ export function DatabaseInit({ currentDay, onDayChange }) {
           </div>
         </div>
       )}
+
+      {/* Seed Soreness Data */}
+      <div>
+        <h2 className="text-3xl font-black text-cyan-400 mb-2">
+          Seed Soreness Journal
+        </h2>
+        <p className="text-slate-400 mb-4">
+          Import soreness entries from the spreadsheet (40 entries, Nov 2025 – Feb 2026)
+        </p>
+        <div className="bg-slate-800/40 backdrop-blur-md rounded-xl border border-slate-700/50 p-6">
+          {sorenessStatus === 'idle' && (
+            <button
+              onClick={handleSeedSoreness}
+              className="px-6 py-3 rounded-lg font-bold uppercase tracking-wider transition-all bg-gradient-to-r from-purple-500 to-cyan-600 text-white hover:scale-105 shadow-lg shadow-purple-500/30"
+            >
+              Seed Soreness Data
+            </button>
+          )}
+          {sorenessStatus === 'initializing' && (
+            <div className="flex items-center gap-4">
+              <div className="text-2xl animate-spin">⚙️</div>
+              <p className="text-slate-400">Seeding soreness entries...</p>
+            </div>
+          )}
+          {sorenessStatus === 'success' && sorenessResult && (
+            <div className="space-y-2">
+              <p className="text-green-400 font-bold">✅ {sorenessResult.message}</p>
+              <p className="text-slate-400 text-sm">
+                {sorenessResult.seeded} of {sorenessResult.total} entries seeded (idempotent — safe to re-run)
+              </p>
+              <button
+                onClick={handleSeedSoreness}
+                className="mt-2 px-4 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors text-sm"
+              >
+                Run Again
+              </button>
+            </div>
+          )}
+          {sorenessStatus === 'error' && sorenessResult && (
+            <div className="space-y-2">
+              <p className="text-red-400 font-bold">❌ Failed to seed soreness data</p>
+              <p className="text-slate-400 text-sm">{sorenessResult.error}</p>
+              <button
+                onClick={handleSeedSoreness}
+                className="mt-2 px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-600 transition-colors text-sm"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Troubleshooting */}
       <div className="bg-slate-900/60 backdrop-blur-md rounded-xl border border-slate-700/50 p-6">

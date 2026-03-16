@@ -1,0 +1,117 @@
+// SQLite snapshot query layer — mirrors the backend's public API response shapes.
+//
+// Each function takes an open sql.js database and returns data in the same
+// format as the corresponding API endpoint, so components can use either
+// source transparently via useDataSource().
+
+// Get current day in the 12-day cycle
+export function getCurrentDay(db) {
+  const row = db.exec('SELECT value FROM settings WHERE key = ?', ['currentDay']);
+  const currentDay = row.length > 0 && row[0].values.length > 0
+    ? parseInt(row[0].values[0][0])
+    : 1;
+  return { currentDay };
+}
+
+// Get workout day definition by day number
+export function getWorkoutDay(db, dayNumber) {
+  const result = db.exec(
+    'SELECT day_number, name, focus, warning, primary_muscle_groups FROM workout_days WHERE day_number = ?',
+    [dayNumber]
+  );
+
+  if (result.length === 0 || result[0].values.length === 0) {
+    return { workoutDay: null };
+  }
+
+  const [dn, name, focus, warning, muscleGroups] = result[0].values[0];
+  return {
+    workoutDay: {
+      dayNumber: dn,
+      name,
+      focus,
+      warning,
+      primaryMuscleGroups: muscleGroups ? JSON.parse(muscleGroups) : [],
+    },
+  };
+}
+
+// Get exercises for a specific day
+export function getExercisesForDay(db, dayNumber) {
+  const result = db.exec(
+    'SELECT id, day_number, name, equipment, target_weight, target_reps, target_sets, location, notes FROM exercises WHERE day_number = ?',
+    [dayNumber]
+  );
+
+  if (result.length === 0) {
+    return { exercises: [] };
+  }
+
+  const exercises = result[0].values.map(([id, dn, name, equipment, tw, tr, ts, location, notes]) => ({
+    id,
+    dayNumber: dn,
+    name,
+    equipment,
+    targetWeight: tw,
+    targetReps: tr,
+    targetSets: ts,
+    location,
+    notes,
+  }));
+
+  return { exercises };
+}
+
+// Get all logged workouts, sorted by date descending
+export function getLoggedWorkouts(db) {
+  const result = db.exec(
+    'SELECT id, day_number, day_name, date, mode, exercises, timestamp, created_at FROM logged_workouts ORDER BY date DESC'
+  );
+
+  if (result.length === 0) {
+    return { workouts: [] };
+  }
+
+  const workouts = result[0].values.map(([id, dn, dayName, date, mode, exercises, timestamp, createdAt]) => ({
+    id,
+    dayNumber: dn,
+    dayName,
+    date,
+    mode,
+    exercises: exercises ? JSON.parse(exercises) : [],
+    timestamp,
+    createdAt,
+  }));
+
+  return { workouts };
+}
+
+// Get all soreness entries, sorted by date descending
+export function getSorenessEntries(db) {
+  const result = db.exec(
+    'SELECT date, muscles FROM soreness_entries ORDER BY date DESC'
+  );
+
+  if (result.length === 0) {
+    return { entries: [] };
+  }
+
+  const entries = result[0].values.map(([date, muscles]) => ({
+    date,
+    muscles: JSON.parse(muscles),
+  }));
+
+  return { entries };
+}
+
+// Get snapshot metadata (generated_at timestamp)
+export function getSnapshotMeta(db) {
+  const result = db.exec('SELECT key, value FROM snapshot_meta');
+  if (result.length === 0) return {};
+
+  const meta = {};
+  for (const [key, value] of result[0].values) {
+    meta[key] = value;
+  }
+  return meta;
+}

@@ -3,6 +3,8 @@
     "rewrite": "/index.html"
   },
   "mimeTypes": {
-    ".json": "application/json"
+    ".json": "application/json",
+    ".db": "application/octet-stream",
+    ".wasm": "application/wasm"
   }
 }

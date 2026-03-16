@@ -21,6 +21,7 @@ import morgan from 'morgan';
 import { CosmosClient } from '@azure/cosmos';
 import { DefaultAzureCredential } from '@azure/identity';
 import { workoutDays, loggedWorkouts, exercises } from './seed-data.js';
+import { sorenessSeedData } from './seed-soreness.js';
 import { createRequireAuth, requireAdmin } from './middleware/auth.js';
 import { createMicrosoftRoutes } from './auth/microsoft-routes.js';
 import { fetchAppConfig } from './startup/appConfig.js';
@@ -407,6 +408,125 @@ async function startServer() {
     } catch (error) {
       console.error('Error migrating data:', error);
       res.status(500).json({ error: 'Failed to migrate data', message: error.message });
+    }
+  });
+
+  // Seed soreness journal from spreadsheet data (admin only).
+  // Upserts all entries — safe to run multiple times.
+  app.post('/api/admin/seed-soreness', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const userId = req.user.sub;
+      let seeded = 0;
+      const errors = [];
+
+      for (const entry of sorenessSeedData) {
+        try {
+          const doc = {
+            id: `soreness-${entry.date}`,
+            type: 'soreness-entry',
+            userId,
+            date: entry.date,
+            muscles: entry.muscles,
+            updatedAt: new Date().toISOString(),
+          };
+          await container.items.upsert(doc);
+          seeded++;
+        } catch (err) {
+          errors.push({ date: entry.date, error: err.message });
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Seeded ${seeded} soreness entries`,
+        seeded,
+        total: sorenessSeedData.length,
+        errors: errors.length > 0 ? errors : undefined,
+      });
+    } catch (error) {
+      console.error('Error seeding soreness data:', error);
+      res.status(500).json({ error: 'Failed to seed soreness data', message: error.message });
+    }
+  });
+
+  // --- Soreness journal endpoints ---
+
+  // Get all soreness entries (public — single user).
+  // Cross-partition query by type; returns all entries newest first.
+  app.get('/api/soreness', async (req, res) => {
+    try {
+      const querySpec = {
+        query: 'SELECT * FROM c WHERE c.type = @type ORDER BY c.date DESC',
+        parameters: [
+          { name: '@type', value: 'soreness-entry' }
+        ]
+      };
+
+      const { resources: entries } = await container.items.query(querySpec).fetchAll();
+      res.json({ entries });
+    } catch (error) {
+      console.error('Error fetching soreness entries:', error);
+      res.status(500).json({ error: 'Failed to fetch soreness entries', message: error.message });
+    }
+  });
+
+  // Create or update a soreness entry for a given date (admin only).
+  // Upserts by date — one entry per date, each containing an array of sore muscles.
+  // Body: { date: "2026-01-15", muscles: [{ group, muscle, level }] }
+  app.post('/api/soreness', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const userId = req.user.sub;
+      const { date, muscles } = req.body;
+
+      if (!date) {
+        return res.status(400).json({ error: 'Missing required field: date' });
+      }
+      if (!muscles || !Array.isArray(muscles)) {
+        return res.status(400).json({ error: 'Missing required field: muscles (array)' });
+      }
+
+      // Validate each muscle entry. muscle can be null for group-level soreness.
+      for (const m of muscles) {
+        if (!m.group || !m.level) {
+          return res.status(400).json({ error: 'Each muscle entry requires group and level' });
+        }
+        if (m.level < 1 || m.level > 10) {
+          return res.status(400).json({ error: 'Soreness level must be between 1 and 10' });
+        }
+      }
+
+      const doc = {
+        id: `soreness-${date}`,
+        type: 'soreness-entry',
+        userId,
+        date,
+        muscles,
+        updatedAt: new Date().toISOString()
+      };
+
+      const { resource } = await container.items.upsert(doc);
+      res.status(201).json({ entry: resource });
+    } catch (error) {
+      console.error('Error saving soreness entry:', error);
+      res.status(500).json({ error: 'Failed to save soreness entry', message: error.message });
+    }
+  });
+
+  // Delete a soreness entry by date (admin only).
+  app.delete('/api/soreness/:date', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const userId = req.user.sub;
+      const { date } = req.params;
+      const id = `soreness-${date}`;
+
+      await container.item(id, userId).delete();
+      res.status(204).send();
+    } catch (error) {
+      if (error.code === 404) {
+        return res.status(404).json({ error: 'Soreness entry not found' });
+      }
+      console.error('Error deleting soreness entry:', error);
+      res.status(500).json({ error: 'Failed to delete soreness entry', message: error.message });
     }
   });
 

@@ -10,6 +10,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { apiFetch } from '../api/client.js';
+import { useDataSource } from '../api/snapshotContext.jsx';
 import { DAY_CONFIG } from '../utils/dayConfig.js';
 import { colors } from '../colors.js';
 
@@ -33,6 +34,7 @@ export function TodayTab({ currentDay, isAdmin }) {
   const [logging, setLogging] = useState(false);
   const [success, setSuccess] = useState(false);
   const [completedExercises, setCompletedExercises] = useState([]);
+  const { fetchWorkoutDay, fetchExercises } = useDataSource();
 
   // Sync selectedDay if currentDay changes externally (e.g. after logging advances it)
   useEffect(() => {
@@ -44,10 +46,10 @@ export function TodayTab({ currentDay, isAdmin }) {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const dayData = await apiFetch(`/api/workout-days/${selectedDay}`);
+        const dayData = await fetchWorkoutDay(selectedDay);
         setWorkoutDay(dayData.workoutDay);
 
-        const exercisesData = await apiFetch(`/api/exercises/day/${selectedDay}`);
+        const exercisesData = await fetchExercises(selectedDay);
         setExercises(exercisesData.exercises || []);
 
         setCompletedExercises(

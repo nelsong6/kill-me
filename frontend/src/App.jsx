@@ -3,6 +3,7 @@
 //   - History (default): calendar/list view of past workouts with color-coded days
 //   - Workout: detailed view of any day in the cycle (defaults to current day)
 //   - Cycle: Synergy 12 overview — philosophy, day breakdown, recovery notes
+//   - Soreness: daily muscle soreness journal with structured muscle picker
 //   - Log (admin only): log a workout with quick or detailed mode
 //   - Admin (localhost only + admin role): day override, database init and data migration
 //
@@ -19,6 +20,7 @@ import { LogTab } from './components/WorkoutDrawer';
 import { UserProfile } from './components/UserProfile';
 import { TabBar } from './components/TabBar';
 import { CycleTab } from './components/CycleTab';
+import { SorenessTab } from './components/SorenessTab';
 import { isAdminMode } from './utils/adminMode';
 import { colors } from './colors';
 
@@ -54,6 +56,7 @@ function App() {
     { id: 'history', label: 'History' },
     { id: 'today', label: 'Workout' },
     { id: 'cycle', label: 'Cycle' },
+    { id: 'soreness', label: 'Soreness' },
     ...(isAdmin ? [{ id: 'log', label: 'Log' }] : []),
     ...(showAdminTab ? [{ id: 'admin', label: 'Admin' }] : [])
   ];
@@ -112,6 +115,10 @@ function App() {
 
           {activeTab === 'cycle' && (
             <CycleTab currentDay={currentDay} />
+          )}
+
+          {activeTab === 'soreness' && (
+            <SorenessTab isAdmin={isAdmin} />
           )}
 
           {activeTab === 'log' && isAdmin && (
