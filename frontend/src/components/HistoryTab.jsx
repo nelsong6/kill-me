@@ -15,6 +15,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { DAY_CONFIG } from '../utils/dayConfig';
 import { useDataSource } from '../api/snapshotContext.jsx';
+import { dateToLocal } from '../utils/dateUtils';
 
 export function HistoryTab({ onDayClick }) {
   const [view, setView] = useState('calendar'); // 'calendar' or 'list'
@@ -60,7 +61,7 @@ export function HistoryTab({ onDayClick }) {
   };
 
   const getWorkoutsForDate = (date) => {
-    const dateString = date.toISOString().split('T')[0];
+    const dateString = dateToLocal(date);
     return workouts.filter(w => 
       w.date === dateString && enabledWorkoutTypes[w.dayNumber]
     );
@@ -331,7 +332,7 @@ export function HistoryTab({ onDayClick }) {
                     days.push(
                       <div
                         key={i}
-                        onClick={() => onDayClick?.(dayWorkouts.length > 0 ? dayWorkouts[0].dayNumber : null, date.toISOString().split('T')[0])}
+                        onClick={() => onDayClick?.(dayWorkouts.length > 0 ? dayWorkouts[0].dayNumber : null, dateToLocal(date))}
                         className={`min-h-[120px] rounded-xl border transition-all overflow-hidden cursor-pointer hover:scale-105 ${
                           isToday
                             ? 'border-cyan-500 shadow-lg shadow-cyan-500/20'
@@ -412,7 +413,7 @@ export function HistoryTab({ onDayClick }) {
                   days.push(
                     <div
                       key={day}
-                      onClick={() => onDayClick?.(dayWorkouts.length > 0 ? dayWorkouts[0].dayNumber : null, date.toISOString().split('T')[0])}
+                      onClick={() => onDayClick?.(dayWorkouts.length > 0 ? dayWorkouts[0].dayNumber : null, dateToLocal(date))}
                       className={`h-20 rounded-lg border transition-all overflow-hidden cursor-pointer hover:scale-105 ${
                         isToday
                           ? 'border-cyan-500 shadow-lg shadow-cyan-500/20'
@@ -505,7 +506,7 @@ export function HistoryTab({ onDayClick }) {
                             key={day}
                             onClick={(e) => {
                               e.stopPropagation(); // Prevent month card click
-                              onDayClick?.(dayWorkouts.length > 0 ? dayWorkouts[0].dayNumber : null, date.toISOString().split('T')[0]);
+                              onDayClick?.(dayWorkouts.length > 0 ? dayWorkouts[0].dayNumber : null, dateToLocal(date));
                             }}
                             className={`aspect-square rounded-sm flex items-center justify-center text-[9px] font-bold transition-all cursor-pointer hover:scale-110 hover:ring-1 hover:ring-white/30 ${
                               isToday

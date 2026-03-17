@@ -13,10 +13,11 @@ import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { getDayInfo, DAY_CONFIG } from '../utils/dayConfig';
 import { apiFetch } from '../api/client.js';
+import { todayLocal } from '../utils/dateUtils';
 
 export function LogTab({ initialDay = null, initialDate = null, onSuccess, currentDay = 1 }) {
   const [selectedDay, setSelectedDay] = useState(initialDay || currentDay);
-  const [selectedDate, setSelectedDate] = useState(initialDate || new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(initialDate || todayLocal());
   const [mode, setMode] = useState('quick'); // 'quick' or 'detailed'
   const [exercises, setExercises] = useState([]);
   const [completedExercises, setCompletedExercises] = useState([]);
@@ -48,7 +49,7 @@ export function LogTab({ initialDay = null, initialDate = null, onSuccess, curre
       setSelectedDay(currentDay);
       setUseNextWorkout(true);
     }
-    setSelectedDate(initialDate || new Date().toISOString().split('T')[0]);
+    setSelectedDate(initialDate || todayLocal());
     setMode('quick');
     fetchExercises();
   }, [initialDay, initialDate, currentDay]);
@@ -168,7 +169,7 @@ export function LogTab({ initialDay = null, initialDate = null, onSuccess, curre
                         // showPicker() might not be supported in all browsers, silently fail
                       }
                     }}
-                    max={new Date().toISOString().split('T')[0]}
+                    max={todayLocal()}
                     className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-slate-200 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/30 transition-all cursor-pointer"
                   />
                 </div>

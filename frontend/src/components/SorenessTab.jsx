@@ -10,6 +10,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { apiFetch } from '../api/client';
 import { useDataSource } from '../api/snapshotContext.jsx';
 import { MUSCLE_TAXONOMY, MUSCLE_GROUPS, searchMuscles } from '../utils/muscleTaxonomy';
+import { todayLocal } from '../utils/dateUtils';
 import { AnatomyDiagram } from './AnatomyDiagrams';
 import { colors } from '../colors';
 
@@ -36,10 +37,8 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-// Get today's date as YYYY-MM-DD
-function todayStr() {
-  return new Date().toISOString().split('T')[0];
-}
+// Alias for readability within this component
+const todayStr = todayLocal;
 
 export function SorenessTab({ isAdmin }) {
   const [entries, setEntries] = useState([]);
@@ -57,6 +56,7 @@ export function SorenessTab({ isAdmin }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [expandedGroup, setExpandedGroup] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [hoveredMuscle, setHoveredMuscle] = useState(null); // { group, muscle } for diagram highlight
 
   // Fetch entries
   useEffect(() => {
@@ -140,10 +140,14 @@ export function SorenessTab({ isAdmin }) {
     return <div style={{ color: colors.text.tertiary, padding: 24 }}>Loading soreness data...</div>;
   }
 
+  // The group to show in the diagram panel — either the expanded picker group or
+  // the hovered muscle's group (hovered takes priority for search results).
+  const diagramGroup = hoveredMuscle?.group || expandedGroup;
+
   // Editor view
   if (editing && isAdmin) {
     return (
-      <div style={{ maxWidth: 700 }}>
+      <div style={{ maxWidth: 960 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
           <button onClick={() => setEditing(false)} style={styles.backBtn}>
             &larr; Back
@@ -164,81 +168,107 @@ export function SorenessTab({ isAdmin }) {
           />
         </div>
 
-        {/* Current muscles */}
-        <div style={{ marginBottom: 16 }}>
-          {editMuscles.length === 0 ? (
-            <p style={{ color: colors.text.tertiary, fontSize: 13 }}>No muscles added yet. Use the picker below.</p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {editMuscles.map((m, i) => (
-                <div key={`${m.group}-${m.muscle || 'group'}`} style={styles.muscleEntry}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 14, color: colors.text.primary, fontWeight: 600 }}>
-                      {m.muscle || m.group}
+        {/* Two-column layout: left = muscles + picker, right = anatomy diagram */}
+        <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+          {/* Left column — muscle list + picker */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Current muscles */}
+            <div style={{ marginBottom: 16 }}>
+              {editMuscles.length === 0 ? (
+                <p style={{ color: colors.text.tertiary, fontSize: 13 }}>No muscles added yet. Use the picker below.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {editMuscles.map((m, i) => (
+                    <div key={`${m.group}-${m.muscle || 'group'}`} style={styles.muscleEntry}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 14, color: colors.text.primary, fontWeight: 600 }}>
+                          {m.muscle || m.group}
+                        </div>
+                        {m.muscle && <div style={{ fontSize: 11, color: colors.text.tertiary }}>{m.group}</div>}
+                      </div>
+
+                      {/* Level slider */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <input
+                          type="range"
+                          min={1}
+                          max={10}
+                          value={m.level}
+                          onChange={(e) => setLevel(i, parseInt(e.target.value))}
+                          style={{ width: 100, accentColor: getLevelColor(m.level) }}
+                        />
+                        <span style={{
+                          fontSize: 14,
+                          fontWeight: 'bold',
+                          color: getLevelColor(m.level),
+                          minWidth: 20,
+                          textAlign: 'center'
+                        }}>
+                          {m.level}
+                        </span>
+                        <span style={{ fontSize: 10, color: colors.text.tertiary, minWidth: 60 }}>
+                          {getLevelLabel(m.level)}
+                        </span>
+                      </div>
+
+                      <button onClick={() => removeMuscle(i)} style={styles.removeBtn}>✕</button>
                     </div>
-                    {m.muscle && <div style={{ fontSize: 11, color: colors.text.tertiary }}>{m.group}</div>}
-                  </div>
-
-                  {/* Level slider */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <input
-                      type="range"
-                      min={1}
-                      max={10}
-                      value={m.level}
-                      onChange={(e) => setLevel(i, parseInt(e.target.value))}
-                      style={{ width: 100, accentColor: getLevelColor(m.level) }}
-                    />
-                    <span style={{
-                      fontSize: 14,
-                      fontWeight: 'bold',
-                      color: getLevelColor(m.level),
-                      minWidth: 20,
-                      textAlign: 'center'
-                    }}>
-                      {m.level}
-                    </span>
-                    <span style={{ fontSize: 10, color: colors.text.tertiary, minWidth: 60 }}>
-                      {getLevelLabel(m.level)}
-                    </span>
-                  </div>
-
-                  <button onClick={() => removeMuscle(i)} style={styles.removeBtn}>✕</button>
+                  ))}
                 </div>
-              ))}
+              )}
+            </div>
+
+            {/* Add muscle button / picker */}
+            {!pickerOpen ? (
+              <button onClick={() => setPickerOpen(true)} style={styles.addBtn}>
+                + Add Muscle
+              </button>
+            ) : (
+              <MusclePicker
+                expandedGroup={expandedGroup}
+                onExpandGroup={setExpandedGroup}
+                onSelect={addMuscle}
+                onClose={() => { setPickerOpen(false); setSearchQuery(''); setHoveredMuscle(null); }}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                searchResults={searchResults}
+                existingMuscles={editMuscles}
+                onHoverMuscle={setHoveredMuscle}
+              />
+            )}
+
+            {/* Save */}
+            <div style={{ marginTop: 24, display: 'flex', gap: 12 }}>
+              <button onClick={saveEntry} disabled={saving} style={styles.saveBtn}>
+                {saving ? 'Saving...' : 'Save'}
+              </button>
+              <button onClick={() => setEditing(false)} style={styles.cancelBtn}>
+                Cancel
+              </button>
+            </div>
+
+            {error && <p style={{ color: colors.accent.red, fontSize: 12, marginTop: 8 }}>{error}</p>}
+          </div>
+
+          {/* Right column — anatomy diagram, shown when picker is open and a group is active */}
+          {pickerOpen && diagramGroup && (
+            <div style={styles.diagramPanel}>
+              <AnatomyDiagram group={diagramGroup} highlightMuscle={hoveredMuscle?.muscle} />
+              {hoveredMuscle?.muscle && (
+                <div style={{ textAlign: 'center', marginTop: 8 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: colors.accent.cyan }}>
+                    {hoveredMuscle.muscle}
+                  </div>
+                  <div style={{ fontSize: 11, color: colors.text.tertiary }}>
+                    {MUSCLE_TAXONOMY[hoveredMuscle.group]?.muscles.find(
+                      m => m.name === hoveredMuscle.muscle
+                    )?.location}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
-
-        {/* Add muscle button / picker */}
-        {!pickerOpen ? (
-          <button onClick={() => setPickerOpen(true)} style={styles.addBtn}>
-            + Add Muscle
-          </button>
-        ) : (
-          <MusclePicker
-            expandedGroup={expandedGroup}
-            onExpandGroup={setExpandedGroup}
-            onSelect={addMuscle}
-            onClose={() => { setPickerOpen(false); setSearchQuery(''); }}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-            searchResults={searchResults}
-            existingMuscles={editMuscles}
-          />
-        )}
-
-        {/* Save */}
-        <div style={{ marginTop: 24, display: 'flex', gap: 12 }}>
-          <button onClick={saveEntry} disabled={saving} style={styles.saveBtn}>
-            {saving ? 'Saving...' : 'Save'}
-          </button>
-          <button onClick={() => setEditing(false)} style={styles.cancelBtn}>
-            Cancel
-          </button>
-        </div>
-
-        {error && <p style={{ color: colors.accent.red, fontSize: 12, marginTop: 8 }}>{error}</p>}
       </div>
     );
   }
@@ -310,8 +340,9 @@ function findEntryMuscles(entries, date) {
   return entry ? entry.muscles : [];
 }
 
-// Muscle picker — browse groups or search
-function MusclePicker({ expandedGroup, onExpandGroup, onSelect, onClose, searchQuery, onSearchChange, searchResults, existingMuscles }) {
+// Muscle picker — browse groups or search.
+// onHoverMuscle({ group, muscle }) drives the right-panel anatomy diagram.
+function MusclePicker({ expandedGroup, onExpandGroup, onSelect, onClose, searchQuery, onSearchChange, searchResults, existingMuscles, onHoverMuscle }) {
   const isAlreadyAdded = (group, muscle) =>
     existingMuscles.some(m => m.group === group && m.muscle === muscle);
   const isGroupAdded = (group) =>
@@ -336,7 +367,7 @@ function MusclePicker({ expandedGroup, onExpandGroup, onSelect, onClose, searchQ
 
       {/* Search results */}
       {searchQuery.length >= 2 ? (
-        <div style={{ maxHeight: 250, overflowY: 'auto', marginTop: 8 }}>
+        <div style={{ maxHeight: 400, overflowY: 'auto', marginTop: 8 }}>
           {searchResults.length === 0 ? (
             <p style={{ color: colors.text.tertiary, fontSize: 12 }}>No matches</p>
           ) : (
@@ -344,6 +375,8 @@ function MusclePicker({ expandedGroup, onExpandGroup, onSelect, onClose, searchQ
               <button
                 key={`${r.group}-${r.muscle || 'group'}`}
                 onClick={() => onSelect(r.group, r.muscle)}
+                onMouseEnter={() => onHoverMuscle({ group: r.group, muscle: r.muscle })}
+                onMouseLeave={() => onHoverMuscle(null)}
                 disabled={r.muscle ? isAlreadyAdded(r.group, r.muscle) : isGroupAdded(r.group)}
                 style={{
                   ...styles.muscleOption,
@@ -383,6 +416,8 @@ function MusclePicker({ expandedGroup, onExpandGroup, onSelect, onClose, searchQ
                   {/* Group-level option */}
                   <button
                     onClick={() => onSelect(group, null)}
+                    onMouseEnter={() => onHoverMuscle({ group, muscle: null })}
+                    onMouseLeave={() => onHoverMuscle(null)}
                     disabled={isGroupAdded(group)}
                     style={{
                       ...styles.muscleOption,
@@ -394,16 +429,13 @@ function MusclePicker({ expandedGroup, onExpandGroup, onSelect, onClose, searchQ
                     <span style={{ color: colors.text.disabled, fontSize: 11 }}>Whole group, not a specific muscle</span>
                   </button>
 
-                  {/* Anatomy diagram */}
-                  <div style={{ padding: '8px 0', display: 'flex', justifyContent: 'center' }}>
-                    <AnatomyDiagram group={group} />
-                  </div>
-
-                  {/* Muscle list */}
+                  {/* Muscle list — diagram moved to right panel */}
                   {MUSCLE_TAXONOMY[group].muscles.map((m) => (
                     <button
                       key={m.name}
                       onClick={() => onSelect(group, m.name)}
+                      onMouseEnter={() => onHoverMuscle({ group, muscle: m.name })}
+                      onMouseLeave={() => onHoverMuscle(null)}
                       disabled={isAlreadyAdded(group, m.name)}
                       style={{
                         ...styles.muscleOption,
@@ -518,6 +550,16 @@ const styles = {
     borderRadius: 6,
     cursor: 'pointer',
     fontSize: 13,
+  },
+  diagramPanel: {
+    width: 300,
+    flexShrink: 0,
+    position: 'sticky',
+    top: 80,
+    padding: 16,
+    backgroundColor: colors.bg.raised,
+    border: `1px solid ${colors.border.subtle}`,
+    borderRadius: 10,
   },
   pickerContainer: {
     backgroundColor: colors.bg.raised,
