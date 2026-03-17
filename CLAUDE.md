@@ -55,7 +55,7 @@ frontend/          React 19 SPA (Vite + Tailwind CSS 4)
 snapshot/          SQLite snapshot generator (Node 20)
   ├── Queries Cosmos DB for all public document types
   ├── Writes a SQLite .db file consumed by the frontend
-  └── Runs daily via GitHub Actions cron (6:00 AM UTC)
+  └── Runs every 4 hours via GitHub Actions cron
 
 backend/           Express.js API (Node 20)
   ├── Self-signed JWT auth (Microsoft ID token exchange)
@@ -139,7 +139,7 @@ All workflows delegate to **nelsong6/pipeline-templates** reusable templates:
 | `tofu-lockfile-check.yml` | PR touching `tofu/` | Validates lockfile is current |
 | `tofu-lockfile-update.yml` | Manual dispatch | Regenerates lockfile across platforms |
 | `generate-local-env.yml` | Manual dispatch | Generates `frontend/.env` and `backend/.env` from infra outputs |
-| `snapshot.yml` | Daily cron (6 AM UTC) / manual | Generates SQLite snapshot from Cosmos DB and commits it to the repo (`frontend/public/snapshot.db`) |
+| `snapshot.yml` | Every 4 hours / manual | Generates SQLite snapshot from Cosmos DB and commits it to the repo (`frontend/public/snapshot.db`) |
 
 ## Development
 
@@ -169,6 +169,12 @@ The frontend displays a git short hash as the build number, injected at build ti
 via Vite's `define` config.
 
 ## Change Log
+
+### 2026-03-17
+
+- **Switched soreness list to vertical muscle-specific format** — the soreness journal displayed each day's sore muscles as horizontal wrapped pills showing just the muscle or group name. Changed to a vertical list where each line shows the severity level (color-coded) followed by the full path: "Group › Specific Muscle" (e.g., "Lats & Back › Erector Spinae (Lower)") or just the group name if no specific muscle was recorded. This makes it immediately clear which exact muscles were sore each day, accommodating variable-length lists without layout issues.
+- **Fixed date change on existing soreness entries leaving duplicates** — the soreness editor had a date picker but changing the date on an existing entry only created a new Cosmos document at the new date without deleting the original. Added `originalDate` tracking so that when an entry's date is changed, the old `soreness-{originalDate}` document is deleted after the new one is saved.
+- **Increased snapshot frequency from daily to every 4 hours** — anonymous visitors were seeing stale data for up to 24 hours. Changed `snapshot.yml` cron from `0 6 * * *` to `0 */4 * * *`.
 
 ### 2026-03-15 (session 8)
 

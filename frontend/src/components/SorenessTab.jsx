@@ -49,6 +49,7 @@ export function SorenessTab({ isAdmin }) {
   // Editor state
   const [editing, setEditing] = useState(false);
   const [editDate, setEditDate] = useState(todayStr());
+  const [originalDate, setOriginalDate] = useState(null); // tracks pre-edit date for moves
   const [editMuscles, setEditMuscles] = useState([]);
   const [saving, setSaving] = useState(false);
 
@@ -85,6 +86,7 @@ export function SorenessTab({ isAdmin }) {
   // Start editing a date (new or existing)
   function startEdit(date, existingMuscles = []) {
     setEditDate(date);
+    setOriginalDate(existingMuscles.length > 0 ? date : null);
     setEditMuscles(existingMuscles.map(m => ({ ...m })));
     setEditing(true);
     setPickerOpen(false);
@@ -129,6 +131,14 @@ export function SorenessTab({ isAdmin }) {
           method: 'POST',
           body: JSON.stringify({ date: editDate, muscles: editMuscles }),
         });
+      }
+      // If date was changed on an existing entry, delete the old one
+      if (originalDate && originalDate !== editDate) {
+        try {
+          await apiFetch(`/api/soreness/${originalDate}`, { method: 'DELETE' });
+        } catch {
+          // Old entry might already be gone
+        }
       }
       setEditing(false);
       await loadEntries();
@@ -318,22 +328,30 @@ export function SorenessTab({ isAdmin }) {
                   </div>
                   <div style={{ fontSize: 10, color: colors.text.disabled }}>{entry.date}</div>
                 </div>
-                <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
                   {entry.muscles.map((m) => (
-                    <span
+                    <div
                       key={`${m.group}-${m.muscle || 'group'}`}
                       onMouseEnter={() => setListHover({ group: m.group, muscle: m.muscle })}
                       onMouseLeave={() => setListHover(null)}
                       style={{
-                        ...styles.musclePill,
-                        borderColor: getLevelColor(m.level),
-                        color: getLevelColor(m.level),
+                        display: 'flex',
+                        alignItems: 'baseline',
+                        gap: 6,
+                        fontSize: 13,
                         cursor: 'default',
                       }}
                     >
-                      {m.muscle || m.group}
-                      <span style={{ fontWeight: 'bold', marginLeft: 4 }}>{m.level}</span>
-                    </span>
+                      <span style={{ color: getLevelColor(m.level), fontWeight: 'bold', minWidth: 16, textAlign: 'right' }}>
+                        {m.level}
+                      </span>
+                      <span style={{ color: colors.text.secondary }}>
+                        {m.muscle
+                          ? <>{m.group} <span style={{ color: colors.text.tertiary }}>›</span> {m.muscle}</>
+                          : m.group
+                        }
+                      </span>
+                    </div>
                   ))}
                 </div>
               </div>
