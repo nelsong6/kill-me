@@ -58,6 +58,9 @@ export function SorenessTab({ isAdmin }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredMuscle, setHoveredMuscle] = useState(null); // { group, muscle } for diagram highlight
 
+  // List view — hovered pill state drives the anatomy diagram panel
+  const [listHover, setListHover] = useState(null); // { group, muscle }
+
   // Fetch entries
   useEffect(() => {
     if (!isReady) return;
@@ -273,63 +276,99 @@ export function SorenessTab({ isAdmin }) {
     );
   }
 
+  const listDiagramGroup = listHover?.group;
+
   // List view
   return (
-    <div style={{ maxWidth: 700 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div>
-          <h2 style={styles.heading}>Soreness Journal</h2>
-          <p style={{ color: colors.text.tertiary, fontSize: 12, margin: '4px 0 0 0' }}>
-            Daily muscle soreness tracking
-          </p>
+    <div style={{ maxWidth: 960, display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+      {/* Left column — entry list */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div>
+            <h2 style={styles.heading}>Soreness Journal</h2>
+            <p style={{ color: colors.text.tertiary, fontSize: 12, margin: '4px 0 0 0' }}>
+              Daily muscle soreness tracking
+            </p>
+          </div>
+          {isAdmin && (
+            <button onClick={() => startEdit(todayStr(), findEntryMuscles(entries, todayStr()))} style={styles.addBtn}>
+              + Log Soreness
+            </button>
+          )}
         </div>
-        {isAdmin && (
-          <button onClick={() => startEdit(todayStr(), findEntryMuscles(entries, todayStr()))} style={styles.addBtn}>
-            + Log Soreness
-          </button>
+
+        {error && <p style={{ color: colors.accent.red, fontSize: 12, marginBottom: 12 }}>{error}</p>}
+
+        {entries.length === 0 ? (
+          <p style={{ color: colors.text.tertiary, fontSize: 14 }}>No soreness entries yet.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {entries.map((entry) => (
+              <div
+                key={entry.date}
+                style={{
+                  ...styles.entryRow,
+                  cursor: isAdmin ? 'pointer' : 'default',
+                }}
+                onClick={isAdmin ? () => startEdit(entry.date, entry.muscles) : undefined}
+              >
+                <div style={{ minWidth: 120 }}>
+                  <div style={{ fontSize: 13, color: colors.text.secondary, fontWeight: 600 }}>
+                    {formatDate(entry.date)}
+                  </div>
+                  <div style={{ fontSize: 10, color: colors.text.disabled }}>{entry.date}</div>
+                </div>
+                <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {entry.muscles.map((m) => (
+                    <span
+                      key={`${m.group}-${m.muscle || 'group'}`}
+                      onMouseEnter={() => setListHover({ group: m.group, muscle: m.muscle })}
+                      onMouseLeave={() => setListHover(null)}
+                      style={{
+                        ...styles.musclePill,
+                        borderColor: getLevelColor(m.level),
+                        color: getLevelColor(m.level),
+                        cursor: 'default',
+                      }}
+                    >
+                      {m.muscle || m.group}
+                      <span style={{ fontWeight: 'bold', marginLeft: 4 }}>{m.level}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
-      {error && <p style={{ color: colors.accent.red, fontSize: 12, marginBottom: 12 }}>{error}</p>}
-
-      {entries.length === 0 ? (
-        <p style={{ color: colors.text.tertiary, fontSize: 14 }}>No soreness entries yet.</p>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {entries.map((entry) => (
-            <div
-              key={entry.date}
-              style={{
-                ...styles.entryRow,
-                cursor: isAdmin ? 'pointer' : 'default',
-              }}
-              onClick={isAdmin ? () => startEdit(entry.date, entry.muscles) : undefined}
-            >
-              <div style={{ minWidth: 120 }}>
-                <div style={{ fontSize: 13, color: colors.text.secondary, fontWeight: 600 }}>
-                  {formatDate(entry.date)}
+      {/* Right column — always reserves space to prevent layout shift */}
+      <div style={{
+        ...styles.diagramPanel,
+        opacity: listDiagramGroup ? 1 : 0,
+        transition: 'opacity 0.15s ease',
+        pointerEvents: listDiagramGroup ? 'auto' : 'none',
+      }}>
+        {listDiagramGroup ? (
+          <>
+            <AnatomyDiagram group={listDiagramGroup} highlightMuscle={listHover?.muscle} />
+            <div style={{ textAlign: 'center', marginTop: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: colors.accent.cyan }}>
+                {listHover?.muscle || listDiagramGroup}
+              </div>
+              {listHover?.muscle && (
+                <div style={{ fontSize: 11, color: colors.text.tertiary }}>
+                  {MUSCLE_TAXONOMY[listDiagramGroup]?.muscles.find(
+                    m => m.name === listHover.muscle
+                  )?.location}
                 </div>
-                <div style={{ fontSize: 10, color: colors.text.disabled }}>{entry.date}</div>
-              </div>
-              <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {entry.muscles.map((m) => (
-                  <span
-                    key={`${m.group}-${m.muscle || 'group'}`}
-                    style={{
-                      ...styles.musclePill,
-                      borderColor: getLevelColor(m.level),
-                      color: getLevelColor(m.level),
-                    }}
-                  >
-                    {m.muscle || m.group}
-                    <span style={{ fontWeight: 'bold', marginLeft: 4 }}>{m.level}</span>
-                  </span>
-                ))}
-              </div>
+              )}
             </div>
-          ))}
-        </div>
-      )}
+          </>
+        ) : (
+          <div style={{ height: 300 }} />
+        )}
+      </div>
     </div>
   );
 }

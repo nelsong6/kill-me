@@ -10,7 +10,7 @@
 // Auth model: anyone can view (History/Today tabs load publicly). Only the
 // admin user (whitelisted Microsoft email) sees the Log tab and the Admin tab.
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useWorkouts } from './hooks/useWorkouts';
 import { useAuth } from './auth/AuthContext.jsx';
 import { TodayTab } from './components/TodayTab';
@@ -24,13 +24,38 @@ import { SorenessTab } from './components/SorenessTab';
 import { isAdminMode } from './utils/adminMode';
 import { colors } from './colors';
 
+// Map URL path to tab id. Unknown paths fall back to 'history'.
+const tabFromPath = (path) => {
+  const slug = path.replace(/^\//, '').toLowerCase();
+  const valid = ['history', 'today', 'cycle', 'soreness', 'log', 'admin'];
+  return valid.includes(slug) ? slug : 'history';
+};
+
+const pathFromTab = (tab) => (tab === 'history' ? '/' : `/${tab}`);
+
 function App() {
-  const [activeTab, setActiveTab] = useState('history');
+  const [activeTab, setActiveTab] = useState(() => tabFromPath(window.location.pathname));
   const { isAdmin, loading } = useAuth();
   const { currentDay, setDay, setCurrentDay } = useWorkouts();
   const [logInitialDay, setLogInitialDay] = useState(null);
   const [logInitialDate, setLogInitialDate] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Push URL when tab changes (but not on initial mount)
+  const navigateTab = useCallback((tab) => {
+    setActiveTab(tab);
+    const target = pathFromTab(tab);
+    if (window.location.pathname !== target) {
+      window.history.pushState(null, '', target);
+    }
+  }, []);
+
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const onPopState = () => setActiveTab(tabFromPath(window.location.pathname));
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   // Admin tab requires both localhost dev mode AND admin role
   const showAdminTab = isAdminMode() && isAdmin;
@@ -39,7 +64,7 @@ function App() {
   const handleOpenLog = (dayNumber = null, date = null) => {
     setLogInitialDay(dayNumber);
     setLogInitialDate(date);
-    setActiveTab('log');
+    navigateTab('log');
   };
 
   const handleWorkoutSuccess = (advancedTo) => {
@@ -49,7 +74,7 @@ function App() {
     setRefreshKey(prev => prev + 1);
     setLogInitialDay(null);
     setLogInitialDate(null);
-    setActiveTab('history');
+    navigateTab('history');
   };
 
   const tabs = [
@@ -100,7 +125,7 @@ function App() {
       <div style={styles.main}>
         {/* Left sidebar: vertical tabs */}
         <div style={styles.leftSidebar}>
-          <TabBar tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
+          <TabBar tabs={tabs} activeTab={activeTab} onTabChange={navigateTab} />
         </div>
 
         {/* Tab content area */}

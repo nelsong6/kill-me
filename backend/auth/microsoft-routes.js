@@ -62,7 +62,7 @@ export function createMicrosoftRoutes({ jwtSecret, microsoftClientId, container 
       const email = payload.email || payload.preferred_username;
 
       const id = `microsoft|${payload.sub}`;
-      const role = email === ALLOWED_EMAIL ? 'admin' : 'viewer';
+      const role = email?.toLowerCase() === ALLOWED_EMAIL ? 'admin' : 'viewer';
       const account = {
         id,
         userId: id,
