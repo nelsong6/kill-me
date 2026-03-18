@@ -23,6 +23,7 @@ import { CycleTab } from './components/CycleTab';
 import { SorenessTab } from './components/SorenessTab';
 import { isAdminMode } from './utils/adminMode';
 import { colors } from './colors';
+import { CalendarDays, Dumbbell, RefreshCw, Activity, PenLine, Wrench } from 'lucide-react';
 
 // Map URL path to tab id. Unknown paths fall back to 'history'.
 const tabFromPath = (path) => {
@@ -40,6 +41,8 @@ function App() {
   const [logInitialDay, setLogInitialDay] = useState(null);
   const [logInitialDate, setLogInitialDate] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [logViewWorkout, setLogViewWorkout] = useState(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(window.innerWidth < 640);
 
   // Push URL when tab changes (but not on initial mount)
   const navigateTab = useCallback((tab) => {
@@ -60,10 +63,19 @@ function App() {
   // Admin tab requires both localhost dev mode AND admin role
   const showAdminTab = isAdminMode() && isAdmin;
 
-  // Navigate to Log tab, optionally pre-filling day/date (e.g. from calendar click)
+  // Navigate to Log tab, optionally pre-filling day/date (e.g. from empty calendar click)
   const handleOpenLog = (dayNumber = null, date = null) => {
+    setLogViewWorkout(null);
     setLogInitialDay(dayNumber);
     setLogInitialDate(date);
+    navigateTab('log');
+  };
+
+  // Navigate to Log tab showing an existing workout's details
+  const handleViewWorkout = (workout) => {
+    setLogViewWorkout(workout);
+    setLogInitialDay(null);
+    setLogInitialDate(null);
     navigateTab('log');
   };
 
@@ -74,16 +86,17 @@ function App() {
     setRefreshKey(prev => prev + 1);
     setLogInitialDay(null);
     setLogInitialDate(null);
+    setLogViewWorkout(null);
     navigateTab('history');
   };
 
   const tabs = [
-    { id: 'history', label: 'History' },
-    { id: 'today', label: 'Workout' },
-    { id: 'cycle', label: 'Cycle' },
-    { id: 'soreness', label: 'Soreness' },
-    ...(isAdmin ? [{ id: 'log', label: 'Log' }] : []),
-    ...(showAdminTab ? [{ id: 'admin', label: 'Admin' }] : [])
+    { id: 'history', label: 'History', icon: CalendarDays },
+    { id: 'today', label: 'Workout', icon: Dumbbell },
+    { id: 'cycle', label: 'Cycle', icon: RefreshCw },
+    { id: 'soreness', label: 'Soreness', icon: Activity },
+    ...(isAdmin ? [{ id: 'log', label: 'Log', icon: PenLine }] : []),
+    ...(showAdminTab ? [{ id: 'admin', label: 'Admin', icon: Wrench }] : [])
   ];
 
   if (loading) {
@@ -124,8 +137,18 @@ function App() {
       {/* ═══════════════════════════════════════════════ */}
       <div style={styles.main}>
         {/* Left sidebar: vertical tabs */}
-        <div style={styles.leftSidebar}>
-          <TabBar tabs={tabs} activeTab={activeTab} onTabChange={navigateTab} />
+        <div style={{
+          ...styles.leftSidebar,
+          width: sidebarCollapsed ? 36 : undefined,
+          transition: 'width 0.15s ease',
+        }}>
+          <TabBar
+            tabs={tabs}
+            activeTab={activeTab}
+            onTabChange={navigateTab}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={() => setSidebarCollapsed(c => !c)}
+          />
         </div>
 
         {/* Tab content area */}
@@ -135,7 +158,11 @@ function App() {
           )}
 
           {activeTab === 'history' && (
-            <HistoryTab key={refreshKey} onDayClick={isAdmin ? handleOpenLog : undefined} />
+            <HistoryTab
+              key={refreshKey}
+              onDayClick={isAdmin ? handleOpenLog : undefined}
+              onWorkoutClick={isAdmin ? handleViewWorkout : undefined}
+            />
           )}
 
           {activeTab === 'cycle' && (
@@ -152,6 +179,12 @@ function App() {
               initialDate={logInitialDate}
               currentDay={currentDay}
               onSuccess={handleWorkoutSuccess}
+              viewWorkout={logViewWorkout}
+              onViewWorkout={handleViewWorkout}
+              onWorkoutChanged={() => {
+                setLogViewWorkout(null);
+                setRefreshKey(prev => prev + 1);
+              }}
             />
           )}
 
@@ -160,6 +193,7 @@ function App() {
           )}
         </div>
       </div>
+
     </div>
   );
 }
@@ -245,7 +279,7 @@ const styles = {
     flex: 1,
     minWidth: 0,
     minHeight: 0,
-    padding: '12px 24px',
+    padding: '12px 12px',
     boxSizing: 'border-box',
     overflowY: 'auto',
   },

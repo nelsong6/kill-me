@@ -238,6 +238,73 @@ async function startServer() {
     }
   });
 
+  // Update a logged workout (date, day number, etc.)
+  app.put('/api/logged-workouts/:id', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { date, dayNumber, dayName, mode, exercises: updatedExercises } = req.body;
+
+      // Cross-partition query to find the workout by id
+      const { resources } = await container.items.query({
+        query: 'SELECT * FROM c WHERE c.id = @id AND c.type = @type',
+        parameters: [
+          { name: '@id', value: id },
+          { name: '@type', value: 'logged-workout' }
+        ]
+      }).fetchAll();
+
+      if (resources.length === 0) {
+        return res.status(404).json({ error: 'Workout not found' });
+      }
+
+      const existing = resources[0];
+      const updated = {
+        ...existing,
+        ...(date !== undefined && { date }),
+        ...(dayNumber !== undefined && { dayNumber }),
+        ...(dayName !== undefined && { dayName }),
+        ...(mode !== undefined && { mode }),
+        ...(updatedExercises !== undefined && { exercises: updatedExercises }),
+        updatedAt: new Date().toISOString()
+      };
+
+      const { resource } = await container.item(id, existing.userId).replace(updated);
+      res.json({ workout: resource });
+    } catch (error) {
+      console.error('Error updating workout:', error);
+      res.status(500).json({ error: 'Failed to update workout', message: error.message });
+    }
+  });
+
+  // Delete a logged workout
+  app.delete('/api/logged-workouts/:id', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Cross-partition query to find the workout's partition key
+      const { resources } = await container.items.query({
+        query: 'SELECT * FROM c WHERE c.id = @id AND c.type = @type',
+        parameters: [
+          { name: '@id', value: id },
+          { name: '@type', value: 'logged-workout' }
+        ]
+      }).fetchAll();
+
+      if (resources.length === 0) {
+        return res.status(404).json({ error: 'Workout not found' });
+      }
+
+      await container.item(id, resources[0].userId).delete();
+      res.status(204).send();
+    } catch (error) {
+      if (error.code === 404) {
+        return res.status(404).json({ error: 'Workout not found' });
+      }
+      console.error('Error deleting workout:', error);
+      res.status(500).json({ error: 'Failed to delete workout', message: error.message });
+    }
+  });
+
   // Update current day in the 12-day cycle
   app.put('/api/current-day', requireAuth, requireAdmin, async (req, res) => {
     try {

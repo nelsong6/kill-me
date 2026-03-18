@@ -17,7 +17,7 @@ import { DAY_CONFIG } from '../utils/dayConfig';
 import { useDataSource } from '../api/snapshotContext.jsx';
 import { dateToLocal } from '../utils/dateUtils';
 
-export function HistoryTab({ onDayClick }) {
+export function HistoryTab({ onDayClick, onWorkoutClick }) {
   const [view, setView] = useState('calendar'); // 'calendar' or 'list'
   const [calendarPeriod, setCalendarPeriod] = useState('month'); // 'week', 'month', or 'year'
   const [workouts, setWorkouts] = useState([]);
@@ -168,56 +168,56 @@ export function HistoryTab({ onDayClick }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-5xl font-black text-cyan-400 uppercase tracking-wide">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-3xl sm:text-5xl font-black text-cyan-400 uppercase tracking-wide">
           History
         </h2>
-        
+
         {/* View Toggle */}
-        <div className="flex gap-3 bg-slate-800/30 backdrop-blur-md rounded-xl p-2">
+        <div className="flex gap-2 sm:gap-3 bg-slate-800/30 backdrop-blur-md rounded-xl p-1.5 sm:p-2">
           <button
             onClick={() => setView('calendar')}
-            className={`px-4 py-2 rounded-lg font-bold uppercase tracking-wide transition-all ${
+            className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-bold uppercase tracking-wide text-sm sm:text-base transition-all ${
               view === 'calendar'
                 ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            📅 Calendar
+            <span className="hidden sm:inline">📅 </span>Calendar
           </button>
           <button
             onClick={() => setView('list')}
-            className={`px-4 py-2 rounded-lg font-bold uppercase tracking-wide transition-all ${
+            className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg font-bold uppercase tracking-wide text-sm sm:text-base transition-all ${
               view === 'list'
                 ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            📋 List
+            <span className="hidden sm:inline">📋 </span>List
           </button>
         </div>
       </div>
 
       {/* Stats Card */}
-      <div className="bg-gradient-to-r from-cyan-500/20 to-blue-600/20 backdrop-blur-md rounded-2xl border border-cyan-500/50 p-6">
-        <div className="grid grid-cols-3 gap-4 text-center">
+      <div className="bg-gradient-to-r from-cyan-500/20 to-blue-600/20 backdrop-blur-md rounded-2xl border border-cyan-500/50 p-4 sm:p-6">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 text-center">
           <div>
-            <div className="text-4xl font-black text-white">{workouts.length}</div>
-            <div className="text-slate-300 text-sm uppercase tracking-wide">Total Workouts</div>
+            <div className="text-2xl sm:text-4xl font-black text-white">{workouts.length}</div>
+            <div className="text-slate-300 text-[10px] sm:text-sm uppercase tracking-wide">Total Workouts</div>
           </div>
           <div>
-            <div className="text-4xl font-black text-white">
+            <div className="text-2xl sm:text-4xl font-black text-white">
               {new Set(workouts.map(w => w.date)).size}
             </div>
-            <div className="text-slate-300 text-sm uppercase tracking-wide">Days Logged</div>
+            <div className="text-slate-300 text-[10px] sm:text-sm uppercase tracking-wide">Days Logged</div>
           </div>
           <div>
-            <div className="text-4xl font-black text-white">
+            <div className="text-2xl sm:text-4xl font-black text-white">
               {new Set(workouts.map(w => w.dayNumber)).size}
             </div>
-            <div className="text-slate-300 text-sm uppercase tracking-wide">Different Days</div>
+            <div className="text-slate-300 text-[10px] sm:text-sm uppercase tracking-wide">Different Days</div>
           </div>
         </div>
       </div>
@@ -227,10 +227,10 @@ export function HistoryTab({ onDayClick }) {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="bg-slate-800/30 backdrop-blur-md rounded-2xl border border-slate-700/50 p-6"
+          className="bg-slate-800/30 backdrop-blur-md rounded-2xl border border-slate-700/50 p-3 sm:p-6"
         >
           {/* Period Toggle */}
-          <div className="flex gap-2 bg-slate-700/30 backdrop-blur-md rounded-xl p-2 mb-6">
+          <div className="flex gap-1 sm:gap-2 bg-slate-700/30 backdrop-blur-md rounded-xl p-1.5 sm:p-2 mb-4 sm:mb-6">
             <button
               onClick={() => {
                 goToCurrentTime();
@@ -273,33 +273,35 @@ export function HistoryTab({ onDayClick }) {
           </div>
 
           {/* Navigation */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
             <button
               onClick={() => changeMonth(-1)}
               disabled={!hasWorkoutsInPast()}
-              className={`px-4 py-2 rounded-lg font-bold transition-all ${
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-bold text-sm sm:text-base transition-all ${
                 hasWorkoutsInPast()
                   ? 'bg-slate-700/60 hover:bg-slate-700 text-slate-200 cursor-pointer'
                   : 'bg-slate-800/30 text-slate-600 cursor-not-allowed opacity-40'
               }`}
             >
-              ← Prev
+              <span className="sm:hidden">←</span>
+              <span className="hidden sm:inline">← Prev</span>
             </button>
-            <h3 className="text-2xl font-bold text-slate-100">
-              {calendarPeriod === 'year' 
+            <h3 className="text-lg sm:text-2xl font-bold text-slate-100">
+              {calendarPeriod === 'year'
                 ? selectedMonth.getFullYear()
                 : selectedMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
             </h3>
             <button
               onClick={() => changeMonth(1)}
               disabled={!hasWorkoutsInFuture()}
-              className={`px-4 py-2 rounded-lg font-bold transition-all ${
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-bold text-sm sm:text-base transition-all ${
                 hasWorkoutsInFuture()
                   ? 'bg-slate-700/60 hover:bg-slate-700 text-slate-200 cursor-pointer'
                   : 'bg-slate-800/30 text-slate-600 cursor-not-allowed opacity-40'
               }`}
             >
-              Next →
+              <span className="sm:hidden">→</span>
+              <span className="hidden sm:inline">Next →</span>
             </button>
           </div>
 
@@ -307,16 +309,17 @@ export function HistoryTab({ onDayClick }) {
           {calendarPeriod === 'week' && (
             <div>
               {/* Day headers */}
-              <div className="grid grid-cols-7 gap-2 mb-2">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                  <div key={day} className="text-center font-bold text-slate-400 text-sm py-2">
-                    {day}
+              <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2">
+                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => (
+                  <div key={idx} className="text-center font-bold text-slate-400 text-xs sm:text-sm py-1 sm:py-2">
+                    <span className="sm:hidden">{day}</span>
+                    <span className="hidden sm:inline">{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][idx]}</span>
                   </div>
                 ))}
               </div>
 
               {/* Week calendar grid */}
-              <div className="grid grid-cols-7 gap-2">
+              <div className="grid grid-cols-7 gap-1 sm:gap-2">
                 {(() => {
                   const days = [];
                   const startOfWeek = new Date(selectedMonth);
@@ -332,8 +335,11 @@ export function HistoryTab({ onDayClick }) {
                     days.push(
                       <div
                         key={i}
-                        onClick={() => onDayClick?.(dayWorkouts.length > 0 ? dayWorkouts[0].dayNumber : null, dateToLocal(date))}
-                        className={`min-h-[120px] rounded-xl border transition-all overflow-hidden cursor-pointer hover:scale-105 ${
+                        onClick={() => dayWorkouts.length > 0
+                          ? onWorkoutClick?.(dayWorkouts[0])
+                          : onDayClick?.(null, dateToLocal(date))
+                        }
+                        className={`min-h-[80px] sm:min-h-[120px] rounded-lg sm:rounded-xl border transition-all overflow-hidden cursor-pointer hover:scale-105 ${
                           isToday
                             ? 'border-cyan-500 shadow-lg shadow-cyan-500/20'
                             : isCurrentMonth
@@ -355,7 +361,7 @@ export function HistoryTab({ onDayClick }) {
                               />
                             ))}
                             {/* Day number overlay */}
-                            <div className="absolute top-1 left-2 text-white font-black text-xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] pointer-events-none">
+                            <div className="absolute top-0.5 left-1 sm:top-1 sm:left-2 text-white font-black text-sm sm:text-xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] pointer-events-none">
                               {date.getDate()}
                             </div>
                           </div>
@@ -368,7 +374,7 @@ export function HistoryTab({ onDayClick }) {
                               : 'bg-slate-900/20'
                           }`}>
                             <div className={`text-center ${isCurrentMonth ? 'text-slate-200' : 'text-slate-600'}`}>
-                              <div className="text-2xl font-black">
+                              <div className="text-lg sm:text-2xl font-black">
                                 {date.getDate()}
                               </div>
                             </div>
@@ -386,11 +392,12 @@ export function HistoryTab({ onDayClick }) {
 
           {/* Month View */}
           {calendarPeriod === 'month' && (
-            <div className="grid grid-cols-7 gap-2">
+            <div className="grid grid-cols-7 gap-1 sm:gap-2">
               {/* Day headers */}
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                <div key={day} className="text-center font-bold text-slate-400 text-sm py-2">
-                  {day}
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => (
+                <div key={idx} className="text-center font-bold text-slate-400 text-xs sm:text-sm py-1 sm:py-2">
+                  <span className="sm:hidden">{day}</span>
+                  <span className="hidden sm:inline">{['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][idx]}</span>
                 </div>
               ))}
 
@@ -401,7 +408,7 @@ export function HistoryTab({ onDayClick }) {
 
                 // Empty cells for days before month starts
                 for (let i = 0; i < startingDayOfWeek; i++) {
-                  days.push(<div key={`empty-${i}`} className="h-20" />);
+                  days.push(<div key={`empty-${i}`} className="h-14 sm:h-20" />);
                 }
 
                 // Days of the month
@@ -413,8 +420,11 @@ export function HistoryTab({ onDayClick }) {
                   days.push(
                     <div
                       key={day}
-                      onClick={() => onDayClick?.(dayWorkouts.length > 0 ? dayWorkouts[0].dayNumber : null, dateToLocal(date))}
-                      className={`h-20 rounded-lg border transition-all overflow-hidden cursor-pointer hover:scale-105 ${
+                      onClick={() => dayWorkouts.length > 0
+                        ? onWorkoutClick?.(dayWorkouts[0])
+                        : onDayClick?.(null, dateToLocal(date))
+                      }
+                      className={`h-14 sm:h-20 rounded-md sm:rounded-lg border transition-all overflow-hidden cursor-pointer hover:scale-105 ${
                         isToday
                           ? 'border-cyan-500 shadow-lg shadow-cyan-500/20'
                           : 'border-slate-700 hover:border-slate-600'
@@ -434,7 +444,7 @@ export function HistoryTab({ onDayClick }) {
                             />
                           ))}
                           {/* Day number overlay */}
-                          <div className="absolute top-1 left-2 text-white font-black text-lg drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] pointer-events-none">
+                          <div className="absolute top-0.5 left-1 sm:top-1 sm:left-2 text-white font-black text-xs sm:text-lg drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] pointer-events-none">
                             {day}
                           </div>
                         </div>
@@ -443,7 +453,7 @@ export function HistoryTab({ onDayClick }) {
                           isToday ? 'bg-cyan-500/10' : 'bg-slate-800/20'
                         }`}>
                           {/* Day number - same style as workout days */}
-                          <div className="absolute top-1 left-2 text-slate-200 font-black text-lg">
+                          <div className="absolute top-0.5 left-1 sm:top-1 sm:left-2 text-slate-200 font-black text-xs sm:text-lg">
                             {day}
                           </div>
                         </div>
@@ -505,8 +515,10 @@ export function HistoryTab({ onDayClick }) {
                           <div
                             key={day}
                             onClick={(e) => {
-                              e.stopPropagation(); // Prevent month card click
-                              onDayClick?.(dayWorkouts.length > 0 ? dayWorkouts[0].dayNumber : null, dateToLocal(date));
+                              e.stopPropagation();
+                              dayWorkouts.length > 0
+                                ? onWorkoutClick?.(dayWorkouts[0])
+                                : onDayClick?.(null, dateToLocal(date));
                             }}
                             className={`aspect-square rounded-sm flex items-center justify-center text-[9px] font-bold transition-all cursor-pointer hover:scale-110 hover:ring-1 hover:ring-white/30 ${
                               isToday
@@ -537,8 +549,8 @@ export function HistoryTab({ onDayClick }) {
           )}
 
           {/* Legend with Filters */}
-          <div className="mt-6 pt-6 border-t border-slate-700">
-            <div className="flex items-center justify-between mb-4">
+          <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-slate-700">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
               <p className="text-slate-200 text-sm font-bold uppercase tracking-wide">
                 Filter by Workout Type:
               </p>
@@ -557,7 +569,7 @@ export function HistoryTab({ onDayClick }) {
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-1.5 sm:gap-2 text-xs">
               {Object.entries(DAY_CONFIG).map(([dayNum, config]) => {
                 const isEnabled = enabledWorkoutTypes[dayNum];
                 const isDimmed = hoveredWorkoutType && hoveredWorkoutType !== dayNum;
@@ -565,7 +577,7 @@ export function HistoryTab({ onDayClick }) {
                   <button
                     key={dayNum}
                     onClick={() => toggleWorkoutType(dayNum)}
-                    className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
+                    className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border transition-all ${
                       isEnabled
                         ? 'border-slate-600 bg-slate-700/40 hover:bg-slate-700/60'
                         : 'border-slate-800 bg-slate-900/40 opacity-40 hover:opacity-60'
@@ -611,9 +623,9 @@ export function HistoryTab({ onDayClick }) {
             workouts.map(workout => (
               <div
                 key={workout.id}
-                onClick={() => onDayClick?.(workout.dayNumber, workout.date)}
+                onClick={() => onWorkoutClick?.(workout)}
                 className="bg-slate-800/30 backdrop-blur-md rounded-xl border border-slate-700/50 p-6 hover:border-slate-600 transition-all cursor-pointer hover:scale-[1.02]"
-                title="Click to log this workout day"
+                title="View workout details"
               >
                 <div className="flex items-start justify-between mb-3">
                   <div>
