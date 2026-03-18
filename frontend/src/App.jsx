@@ -21,14 +21,15 @@ import { UserProfile } from './components/UserProfile';
 import { TabBar } from './components/TabBar';
 import { CycleTab } from './components/CycleTab';
 import { SorenessTab } from './components/SorenessTab';
+import { ExercisesTab } from './components/ExercisesTab';
 import { isAdminMode } from './utils/adminMode';
 import { colors } from './colors';
-import { CalendarDays, Dumbbell, RefreshCw, Activity, PenLine, Wrench } from 'lucide-react';
+import { CalendarDays, Dumbbell, RefreshCw, Activity, PenLine, Wrench, ListChecks } from 'lucide-react';
 
 // Map URL path to tab id. Unknown paths fall back to 'history'.
 const tabFromPath = (path) => {
   const slug = path.replace(/^\//, '').toLowerCase();
-  const valid = ['history', 'today', 'cycle', 'soreness', 'log', 'admin'];
+  const valid = ['history', 'today', 'exercises', 'cycle', 'soreness', 'log', 'admin'];
   return valid.includes(slug) ? slug : 'history';
 };
 
@@ -44,6 +45,8 @@ function App() {
   const [logViewWorkout, setLogViewWorkout] = useState(null);
   const [logViewCardio, setLogViewCardio] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(window.innerWidth < 640);
+  const [exercisesInitialDay, setExercisesInitialDay] = useState(null);
+  const [exercisesInitialName, setExercisesInitialName] = useState(null);
 
   // Push URL when tab changes (but not on initial mount)
   const navigateTab = useCallback((tab) => {
@@ -111,9 +114,16 @@ function App() {
     navigateTab('history');
   };
 
+  const handleNavigateExercises = (dayNumber = null, exerciseName = null) => {
+    setExercisesInitialDay(dayNumber);
+    setExercisesInitialName(exerciseName);
+    navigateTab('exercises');
+  };
+
   const tabs = [
     { id: 'history', label: 'History', icon: CalendarDays },
     { id: 'today', label: 'Workout', icon: Dumbbell },
+    { id: 'exercises', label: 'Exercises', icon: ListChecks },
     { id: 'cycle', label: 'Cycle', icon: RefreshCw },
     { id: 'soreness', label: 'Soreness', icon: Activity },
     ...(isAdmin ? [{ id: 'log', label: 'Log', icon: PenLine }] : []),
@@ -175,7 +185,16 @@ function App() {
         {/* Tab content area */}
         <div style={styles.tabContent}>
           {activeTab === 'today' && (
-            <TodayTab currentDay={currentDay} isAdmin={isAdmin} />
+            <TodayTab currentDay={currentDay} isAdmin={isAdmin} onNavigateExercises={handleNavigateExercises} />
+          )}
+
+          {activeTab === 'exercises' && (
+            <ExercisesTab
+              currentDay={currentDay}
+              isAdmin={isAdmin}
+              initialDay={exercisesInitialDay}
+              initialExercise={exercisesInitialName}
+            />
           )}
 
           {activeTab === 'history' && (

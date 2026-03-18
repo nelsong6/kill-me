@@ -177,6 +177,20 @@ export function LogTab({
   // Data fetching
   // ─────────────────────────────────────────────
 
+  // Get the default variation for an exercise (handles pre-migration flat fields)
+  const getDefaultVariation = (ex) => {
+    const vars = ex.variations;
+    if (!vars || !Array.isArray(vars) || vars.length === 0) {
+      return {
+        name: 'Standard',
+        targetWeight: ex.targetWeight,
+        targetReps: ex.targetReps,
+        targetSets: ex.targetSets,
+      };
+    }
+    return vars.find(v => v.default) || vars[0];
+  };
+
   const fetchExercises = async () => {
     setLoading(true);
     try {
@@ -192,22 +206,29 @@ export function LogTab({
 
       const checklist = defs.map(ex => {
         const saved = savedByName[ex.name];
+        const dv = getDefaultVariation(ex);
         if (saved) {
           delete savedByName[ex.name];
+          // Use saved variation, or fall back to default
+          const savedVarName = saved.variation || 'Standard';
+          const vars = ex.variations || [];
+          const matchedVar = vars.find(v => v.name === savedVarName) || dv;
           return {
             name: ex.name,
+            variation: savedVarName,
             completed: true,
-            weight: saved.weight ?? ex.targetWeight ?? '',
-            reps: saved.reps ?? ex.targetReps ?? '',
-            sets: saved.sets ?? ex.targetSets ?? '',
+            weight: saved.weight ?? matchedVar.targetWeight ?? '',
+            reps: saved.reps ?? matchedVar.targetReps ?? '',
+            sets: saved.sets ?? matchedVar.targetSets ?? '',
           };
         }
         return {
           name: ex.name,
+          variation: dv.name,
           completed: false,
-          weight: ex.targetWeight || '',
-          reps: ex.targetReps || '',
-          sets: ex.targetSets || '',
+          weight: dv.targetWeight || '',
+          reps: dv.targetReps || '',
+          sets: dv.targetSets || '',
         };
       });
 
@@ -215,6 +236,7 @@ export function LogTab({
       for (const ex of Object.values(savedByName)) {
         checklist.push({
           name: ex.name,
+          variation: ex.variation || 'Standard',
           completed: true,
           weight: ex.weight ?? '',
           reps: ex.reps ?? '',
@@ -679,21 +701,59 @@ export function LogTab({
                           className="mt-1 w-6 h-6 rounded bg-slate-800 border-slate-600 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-0 cursor-pointer"
                         />
                         <div className="flex-1">
-                          <h4 className="font-bold text-slate-100 mb-2">{exercise.name}</h4>
+                          <h4 className="font-bold text-slate-100 mb-1">
+                            {exercise.name}
+                            {exercise.variation && exercise.variation !== 'Standard' && (
+                              <span className="text-cyan-400 text-sm font-normal ml-2">({exercise.variation})</span>
+                            )}
+                          </h4>
 
-                          {exercises[idx] && (exercises[idx]?.targetWeight || exercises[idx]?.targetReps || exercises[idx]?.targetSets) && (
-                            <div className="text-sm text-slate-400 mb-3">
-                              {exercises[idx]?.targetWeight && (
-                                <span>Target: {exercises[idx].targetWeight} lbs</span>
-                              )}
-                              {exercises[idx]?.targetReps && (
-                                <span> × {exercises[idx].targetReps} reps</span>
-                              )}
-                              {exercises[idx]?.targetSets && (
-                                <span> × {exercises[idx].targetSets} sets</span>
-                              )}
-                            </div>
-                          )}
+                          {(() => {
+                            const exDef = exercises[idx];
+                            const vars = exDef?.variations || [];
+                            const hasMultipleVars = vars.length > 1;
+                            const selectedVar = vars.find(v => v.name === exercise.variation) || getDefaultVariation(exDef || {});
+                            return (
+                              <>
+                                {hasMultipleVars && (
+                                  <div className="flex flex-wrap gap-1.5 mb-2">
+                                    {vars.map((v, vi) => (
+                                      <button
+                                        key={vi}
+                                        type="button"
+                                        onClick={() => {
+                                          updateExercise(idx, 'variation', v.name);
+                                          updateExercise(idx, 'weight', v.targetWeight || '');
+                                          updateExercise(idx, 'reps', v.targetReps || '');
+                                          updateExercise(idx, 'sets', v.targetSets || '');
+                                        }}
+                                        className={`text-xs px-2 py-0.5 rounded-full border cursor-pointer transition-all ${
+                                          exercise.variation === v.name
+                                            ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                                            : 'bg-slate-700/50 text-slate-400 border-slate-600/40 hover:border-slate-500'
+                                        }`}
+                                      >
+                                        {v.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                                {(selectedVar.targetWeight || selectedVar.targetReps || selectedVar.targetSets) && (
+                                  <div className="text-sm text-slate-400 mb-3">
+                                    {selectedVar.targetWeight && (
+                                      <span>Target: {selectedVar.targetWeight} lbs</span>
+                                    )}
+                                    {selectedVar.targetReps && (
+                                      <span> × {selectedVar.targetReps} reps</span>
+                                    )}
+                                    {selectedVar.targetSets && (
+                                      <span> × {selectedVar.targetSets} sets</span>
+                                    )}
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
 
                           {exercise.completed && (
                             <div className="grid grid-cols-3 gap-2">

@@ -18,6 +18,9 @@ export function DatabaseInit({ currentDay, onDayChange }) {
   const [sorenessStatus, setSorenessStatus] = useState('idle');
   const [sorenessResult, setSorenessResult] = useState(null);
 
+  const [variationStatus, setVariationStatus] = useState('idle');
+  const [variationResult, setVariationResult] = useState(null);
+
   const handleInitialize = async () => {
     setStatus('initializing');
     setError(null);
@@ -49,6 +52,19 @@ export function DatabaseInit({ currentDay, onDayChange }) {
     } catch (err) {
       setSorenessStatus('error');
       setSorenessResult({ error: err.message });
+    }
+  };
+
+  const handleMigrateVariations = async () => {
+    setVariationStatus('initializing');
+    setVariationResult(null);
+    try {
+      const data = await apiFetch('/api/admin/migrate-exercise-variations', { method: 'POST' });
+      setVariationStatus('success');
+      setVariationResult(data);
+    } catch (err) {
+      setVariationStatus('error');
+      setVariationResult({ error: err.message });
     }
   };
 
@@ -363,6 +379,62 @@ export function DatabaseInit({ currentDay, onDayChange }) {
               <p className="text-slate-400 text-sm">{sorenessResult.error}</p>
               <button
                 onClick={handleSeedSoreness}
+                className="mt-2 px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-600 transition-colors text-sm"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Migrate Exercise Variations */}
+      <div>
+        <h2 className="text-3xl font-black text-cyan-400 mb-2">
+          Migrate Exercise Variations
+        </h2>
+        <p className="text-slate-400 mb-4">
+          Converts flat exercise targets to the variations model and adds variation
+          labels to existing logged workouts. Idempotent — safe to re-run.
+        </p>
+        <div className="bg-slate-800/40 backdrop-blur-md rounded-xl border border-slate-700/50 p-6">
+          {variationStatus === 'idle' && (
+            <button
+              onClick={handleMigrateVariations}
+              className="px-6 py-3 rounded-lg font-bold uppercase tracking-wider transition-all bg-gradient-to-r from-amber-500 to-orange-600 text-white hover:scale-105 shadow-lg shadow-amber-500/30"
+            >
+              Migrate Variations
+            </button>
+          )}
+          {variationStatus === 'initializing' && (
+            <div className="flex items-center gap-4">
+              <div className="text-2xl animate-spin">⚙️</div>
+              <p className="text-slate-400">Migrating exercise variations...</p>
+            </div>
+          )}
+          {variationStatus === 'success' && variationResult && (
+            <div className="space-y-2">
+              <p className="text-green-400 font-bold">✅ {variationResult.message}</p>
+              {variationResult.stats && (
+                <div className="text-slate-400 text-sm space-y-1">
+                  <p>Exercises: {variationResult.stats.exercises.migrated} of {variationResult.stats.exercises.found} migrated</p>
+                  <p>Workouts: {variationResult.stats.workouts.migrated} of {variationResult.stats.workouts.found} migrated</p>
+                </div>
+              )}
+              <button
+                onClick={handleMigrateVariations}
+                className="mt-2 px-4 py-2 bg-slate-700 text-slate-300 rounded-lg hover:bg-slate-600 transition-colors text-sm"
+              >
+                Run Again
+              </button>
+            </div>
+          )}
+          {variationStatus === 'error' && variationResult && (
+            <div className="space-y-2">
+              <p className="text-red-400 font-bold">❌ Failed to migrate variations</p>
+              <p className="text-slate-400 text-sm">{variationResult.error}</p>
+              <button
+                onClick={handleMigrateVariations}
                 className="mt-2 px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-600 transition-colors text-sm"
               >
                 Try Again

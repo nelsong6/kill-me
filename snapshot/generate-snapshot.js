@@ -60,11 +60,9 @@ const SCHEMA = `
     day_number    INTEGER NOT NULL,
     name          TEXT NOT NULL,
     equipment     TEXT,
-    target_weight TEXT,
-    target_reps   TEXT,
-    target_sets   TEXT,
     location      TEXT,
-    notes         TEXT
+    notes         TEXT,
+    variations    TEXT
   );
   CREATE INDEX idx_exercises_day ON exercises(day_number);
 
@@ -170,19 +168,27 @@ async function main() {
 
     // Exercises
     const insertExercise = db.prepare(
-      'INSERT INTO exercises (id, day_number, name, equipment, target_weight, target_reps, target_sets, location, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO exercises (id, day_number, name, equipment, location, notes, variations) VALUES (?, ?, ?, ?, ?, ?, ?)'
     );
     for (const doc of results.exercises) {
+      // Build variations — either from the doc's variations array or from
+      // flat targetWeight/Reps/Sets (pre-migration compat)
+      let variations = doc.variations;
+      if (!variations || !Array.isArray(variations)) {
+        const fallback = { name: 'Standard', default: true };
+        if (doc.targetWeight != null) fallback.targetWeight = doc.targetWeight;
+        if (doc.targetReps != null) fallback.targetReps = doc.targetReps;
+        if (doc.targetSets != null) fallback.targetSets = doc.targetSets;
+        variations = [fallback];
+      }
       insertExercise.run(
         doc.id,
         doc.dayNumber,
         doc.name,
         doc.equipment || null,
-        doc.targetWeight != null ? String(doc.targetWeight) : null,
-        doc.targetReps != null ? String(doc.targetReps) : null,
-        doc.targetSets != null ? String(doc.targetSets) : null,
         doc.location || null,
         doc.notes || null,
+        JSON.stringify(variations),
       );
     }
 

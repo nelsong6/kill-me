@@ -39,7 +39,7 @@ export function getWorkoutDay(db, dayNumber) {
 // Get exercises for a specific day
 export function getExercisesForDay(db, dayNumber) {
   const result = db.exec(
-    'SELECT id, day_number, name, equipment, target_weight, target_reps, target_sets, location, notes FROM exercises WHERE day_number = ?',
+    'SELECT id, day_number, name, equipment, location, notes, variations FROM exercises WHERE day_number = ?',
     [dayNumber]
   );
 
@@ -47,16 +47,14 @@ export function getExercisesForDay(db, dayNumber) {
     return { exercises: [] };
   }
 
-  const exercises = result[0].values.map(([id, dn, name, equipment, tw, tr, ts, location, notes]) => ({
+  const exercises = result[0].values.map(([id, dn, name, equipment, location, notes, variations]) => ({
     id,
     dayNumber: dn,
     name,
     equipment,
-    targetWeight: tw,
-    targetReps: tr,
-    targetSets: ts,
     location,
     notes,
+    variations: variations ? JSON.parse(variations) : [{ name: 'Standard', default: true }],
   }));
 
   return { exercises };

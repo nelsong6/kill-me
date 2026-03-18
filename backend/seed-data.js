@@ -9,6 +9,11 @@
 //
 // Historical logged workouts use a hardcoded legacy userId. After deploying the
 // Microsoft auth migration, run /api/admin/migrate-data to re-partition them.
+//
+// Exercise model: each exercise has a `variations` array. Each variation has its
+// own targetWeight/Reps/Sets. One variation per exercise is marked `default: true`
+// — that's what pre-fills in the log form. Exercises with no meaningful variations
+// have a single "Standard" entry.
 
 // 12-Day Workout Cycle Definition
 export const workoutDays = [
@@ -37,7 +42,7 @@ export const loggedWorkouts = [
   { date: '2026-01-08', dayNumber: 3, dayName: 'Hamstring', userId: 'cf57d57d-1411-4f59-b517-e9a8600b140a' },
   { date: '2026-01-05', dayNumber: 2, dayName: 'Calves', userId: 'cf57d57d-1411-4f59-b517-e9a8600b140a' },
   { date: '2026-01-04', dayNumber: 1, dayName: 'Compound: Legs', userId: 'cf57d57d-1411-4f59-b517-e9a8600b140a' },
-  
+
   // 2025 November/December Workouts
   { date: '2025-12-11', dayNumber: 6, dayName: 'Bicep', userId: 'cf57d57d-1411-4f59-b517-e9a8600b140a' },
   { date: '2025-12-10', dayNumber: 5, dayName: 'Compound: Pulls', userId: 'cf57d57d-1411-4f59-b517-e9a8600b140a' },
@@ -53,72 +58,348 @@ export const loggedWorkouts = [
   { date: '2025-11-14', dayNumber: 12, dayName: 'Grip', userId: 'cf57d57d-1411-4f59-b517-e9a8600b140a' }
 ];
 
-// Exercise Library (from spreadsheet exercise sheets)
+// Exercise Library
+//
+// Each exercise has a `variations` array with per-variation targets. The `default`
+// flag marks which variation pre-fills in the log form. Exercises that don't have
+// meaningful variations use a single "Standard" entry.
 export const exercises = [
-  // Compound: Legs
-  { name: 'Barbell Squat (Smith Machine)', dayNumber: 1, equipment: 'Smith Machine', targetWeight: 115, targetReps: '6-8', targetSets: 4, location: 'Gym' },
-  { name: 'Leg Press', dayNumber: 1, equipment: 'Leg Press Machine', targetWeight: 140, targetReps: 12, targetSets: 3, location: 'Gym' },
-  { name: 'Leg Extension', dayNumber: 1, equipment: 'Leg Extension Machine', targetWeight: 60, targetReps: '12-15', targetSets: 3, location: 'Gym', notes: 'Lowest seat, legs notch 1, back notch 1. Superset with leg curls' },
-  { name: 'Leg Curl', dayNumber: 1, equipment: 'Leg Curl Machine', targetWeight: 60, targetReps: '12-15', targetSets: 3, location: 'Gym', notes: 'Highest seat, legs at lowest notch. Superset with leg extension' },
-  { name: 'Seated Calf Raises', dayNumber: 1, equipment: 'Bench + Dumbbells', targetWeight: 80, targetReps: 12, targetSets: 3, location: 'Gym' },
-  
-  // Calves
-  { name: 'Calf Stands', dayNumber: 2, equipment: 'Bodyweight', targetReps: '5 minutes', location: 'Anywhere', notes: 'Stand on toes for about 5 minutes' },
-  { name: 'Calf Stretches', dayNumber: 2, equipment: 'None', location: 'Anywhere' },
-  { name: 'Seated Calf Raises', dayNumber: 2, equipment: 'Seated Calf Raise Machine', targetWeight: 90, targetReps: 12, targetSets: 3, location: 'Gym' },
-  
-  // Hamstring
-  { name: 'Single Leg Cable Stretch (Front)', dayNumber: 3, equipment: 'Cable', targetReps: '3-5 minutes, 2-5 times', location: 'Gym' },
-  { name: 'Single Leg Cable Stretch (Side)', dayNumber: 3, equipment: 'Cable', targetReps: '3-5 minutes, 2-5 times', location: 'Gym' },
-  { name: 'Single Leg Forward Lean', dayNumber: 3, equipment: 'Bodyweight', location: 'Anywhere' },
-  { name: 'Seated Splits', dayNumber: 3, equipment: 'None', location: 'Anywhere' },
-  
-  // Abs
-  { name: 'Crunches', dayNumber: 4, equipment: 'Bodyweight', location: 'Anywhere' },
-  { name: 'Under Leg Crunches', dayNumber: 4, equipment: 'Bodyweight', location: 'Anywhere' },
-  
-  // Compound: Pulls
-  { name: 'Lat Pulldowns', dayNumber: 5, equipment: 'Cable Machine', targetWeight: 40, targetReps: 12, targetSets: 3, location: 'Home' },
-  { name: 'Bent-Over Rows', dayNumber: 5, equipment: 'Barbell', targetWeight: 35, targetReps: 12, targetSets: 3, location: 'Home' },
-  { name: 'Seated Cable Rows', dayNumber: 5, equipment: 'Cable Machine', targetWeight: 80, targetReps: 12, targetSets: 3, location: 'Home' },
-  
-  // Biceps
-  { name: 'Dumbbell Bicep Curl', dayNumber: 6, equipment: 'Dumbbells', targetWeight: 20, targetReps: 'Failure', targetSets: 3, location: 'Home', notes: 'Reps to failure, decrease weight by 5-10 each time' },
-  { name: 'Cable Bicep Curl', dayNumber: 6, equipment: 'Cable Machine', targetWeight: 20, targetReps: 'Failure', targetSets: 3, location: 'Home', notes: 'Reps to failure, decrease weight by 5-10 each time' },
-  
-  // Torso
-  { name: 'Torso Twist', dayNumber: 7, equipment: 'Torso Twist Machine', targetWeight: 90, targetReps: 20, targetSets: 3, location: 'Gym', notes: 'Max twist. One set is rotating from each side' },
-  { name: 'Back Extension (Seated)', dayNumber: 7, equipment: 'Seated Back Extension Machine', targetWeight: 140, targetReps: 12, targetSets: 3, location: 'Gym', notes: 'Max range of motion' },
-  { name: 'Hip Adductor', dayNumber: 7, equipment: 'Hip Adductor Machine', targetWeight: 100, targetReps: 'Failure', targetSets: 3, location: 'Gym', notes: 'Max stretch. Involves static stretching and contractions' },
-  { name: 'Hip Abductor', dayNumber: 7, equipment: 'Hip Abductor Machine', targetWeight: 80, targetReps: 'Failure', targetSets: 3, location: 'Gym' },
-  { name: 'Situps', dayNumber: 7, equipment: 'Situp Device', targetReps: 12, targetSets: 3, location: 'Gym' },
-  
-  // Pecs (Mobility)
-  { name: 'Dumbbell Bench Press (Light)', dayNumber: 8, equipment: 'Dumbbells', targetWeight: 20, targetReps: 12, targetSets: 3, location: 'Home', notes: '⚠️ Light weight only for mobility' },
-  { name: 'Cable Fly', dayNumber: 8, equipment: 'Cable Machine', location: 'Home', notes: '⚠️ Light weight, focus on stretch' },
-  { name: 'Static Hold (Lowered Position)', dayNumber: 8, equipment: 'Dumbbells', location: 'Home', notes: '⚠️ Horizontal dumbbell hold in lowered position' },
-  
-  // Compound: Push
-  { name: 'Barbell Bench Press (Smith Machine)', dayNumber: 9, equipment: 'Smith Machine', targetWeight: 115, targetReps: 12, targetSets: 3, location: 'Gym' },
-  { name: 'Dumbbell Bench Press', dayNumber: 9, equipment: 'Dumbbells', targetWeight: 20, targetReps: 12, targetSets: 3, location: 'Home', notes: 'Reps to failure, decreasing weight' },
-  { name: 'Dips', dayNumber: 9, equipment: 'Dip Machine', targetWeight: -90, targetReps: '15-20', targetSets: 3, location: 'Gym' },
-  
-  // Triceps
-  { name: 'Cable Standing High Cross', dayNumber: 10, equipment: 'Cable Machine', location: 'Home' },
-  { name: 'Tricep Pushdown', dayNumber: 10, equipment: 'Cable Machine', location: 'Home' },
-  { name: 'Tricep Extension (Katana)', dayNumber: 10, equipment: 'Dumbbell', targetWeight: 10, location: 'Home' },
-  
-  // Deltoids
-  { name: 'Reverse Delt Cable Fly', dayNumber: 11, equipment: 'Cable Machine', location: 'Home' },
-  { name: 'Side Delt Cable Raises', dayNumber: 11, equipment: 'Cable Machine', location: 'Home' },
-  { name: 'Front Deltoid Raises (Bottom to Top)', dayNumber: 11, equipment: 'Cable Machine', location: 'Home' },
-  { name: 'Front Deltoid Raises (Top to Bottom)', dayNumber: 11, equipment: 'Cable Machine', location: 'Home' },
-  { name: 'Rotator Cuff Work', dayNumber: 11, equipment: 'Light Weight', location: 'Home' },
-  
-  // Grip
-  { name: 'Gripper - Trainer', dayNumber: 12, equipment: 'Hand Gripper', targetReps: 'Failure', targetSets: 3, location: 'Home', notes: 'Start with left/weak side' },
-  { name: 'Gripper - Sport', dayNumber: 12, equipment: 'Hand Gripper', targetReps: 'Failure', targetSets: 3, location: 'Home', notes: 'Start with left/weak side' },
-  { name: 'Gripper - Guide', dayNumber: 12, equipment: 'Hand Gripper', targetReps: 'Failure', targetSets: 3, location: 'Home', notes: 'Start with left/weak side' },
-  { name: 'Wrist Curls (Pronated)', dayNumber: 12, equipment: 'Dumbbells', targetWeight: 20, targetReps: 'Failure', targetSets: 3, location: 'Home' },
-  { name: 'Wrist Curls (Supinated)', dayNumber: 12, equipment: 'Dumbbells', targetWeight: 20, targetReps: 'Failure', targetSets: 3, location: 'Home' }
+  // ── Day 1: Compound Legs ──
+  {
+    name: 'Barbell Squat', dayNumber: 1, equipment: 'Smith Machine', location: 'Gym',
+    variations: [
+      { name: 'Standard', targetWeight: 115, targetReps: '6-8', targetSets: 4, default: true },
+      { name: 'Wide Stance', targetWeight: 105, targetReps: '8-10', targetSets: 4 },
+      { name: 'Close Stance', targetWeight: 95, targetReps: '8-10', targetSets: 4 },
+      { name: 'Pause Rep', targetWeight: 95, targetReps: '6-8', targetSets: 3 },
+    ],
+  },
+  {
+    name: 'Leg Press', dayNumber: 1, equipment: 'Leg Press Machine', location: 'Gym',
+    variations: [
+      { name: 'Standard', targetWeight: 140, targetReps: 12, targetSets: 3, default: true },
+      { name: 'High Foot', targetWeight: 140, targetReps: 12, targetSets: 3 },
+      { name: 'Narrow Foot', targetWeight: 120, targetReps: 12, targetSets: 3 },
+      { name: 'Single Leg', targetWeight: 70, targetReps: 10, targetSets: 3 },
+    ],
+  },
+  {
+    name: 'Leg Extension', dayNumber: 1, equipment: 'Leg Extension Machine', location: 'Gym',
+    notes: 'Lowest seat, legs notch 1, back notch 1. Superset with leg curls',
+    variations: [
+      { name: 'Standard', targetWeight: 60, targetReps: '12-15', targetSets: 3, default: true },
+      { name: 'Single Leg', targetWeight: 30, targetReps: '12-15', targetSets: 3 },
+      { name: 'Pause at Top', targetWeight: 50, targetReps: '10-12', targetSets: 3 },
+    ],
+  },
+  {
+    name: 'Leg Curl', dayNumber: 1, equipment: 'Leg Curl Machine', location: 'Gym',
+    notes: 'Highest seat, legs at lowest notch. Superset with leg extension',
+    variations: [
+      { name: 'Standard', targetWeight: 60, targetReps: '12-15', targetSets: 3, default: true },
+      { name: 'Single Leg', targetWeight: 30, targetReps: '12-15', targetSets: 3 },
+    ],
+  },
+  {
+    name: 'Seated Calf Raises', dayNumber: 1, equipment: 'Bench + Dumbbells', location: 'Gym',
+    variations: [
+      { name: 'Standard', targetWeight: 80, targetReps: 12, targetSets: 3, default: true },
+    ],
+  },
+
+  // ── Day 2: Calves ──
+  {
+    name: 'Calf Stands', dayNumber: 2, equipment: 'Bodyweight', location: 'Anywhere',
+    notes: 'Stand on toes for about 5 minutes',
+    variations: [
+      { name: 'Standard', targetReps: '5 minutes', default: true },
+    ],
+  },
+  {
+    name: 'Calf Stretches', dayNumber: 2, equipment: 'None', location: 'Anywhere',
+    variations: [
+      { name: 'Standard', default: true },
+    ],
+  },
+  {
+    name: 'Seated Calf Raises', dayNumber: 2, equipment: 'Seated Calf Raise Machine', location: 'Gym',
+    variations: [
+      { name: 'Standard', targetWeight: 90, targetReps: 12, targetSets: 3, default: true },
+    ],
+  },
+
+  // ── Day 3: Hamstring ──
+  {
+    name: 'Single Leg Cable Stretch (Front)', dayNumber: 3, equipment: 'Cable', location: 'Gym',
+    variations: [
+      { name: 'Standard', targetReps: '3-5 minutes, 2-5 times', default: true },
+    ],
+  },
+  {
+    name: 'Single Leg Cable Stretch (Side)', dayNumber: 3, equipment: 'Cable', location: 'Gym',
+    variations: [
+      { name: 'Standard', targetReps: '3-5 minutes, 2-5 times', default: true },
+    ],
+  },
+  {
+    name: 'Single Leg Forward Lean', dayNumber: 3, equipment: 'Bodyweight', location: 'Anywhere',
+    variations: [
+      { name: 'Standard', default: true },
+    ],
+  },
+  {
+    name: 'Seated Splits', dayNumber: 3, equipment: 'None', location: 'Anywhere',
+    variations: [
+      { name: 'Standard', default: true },
+    ],
+  },
+
+  // ── Day 4: Abs ──
+  {
+    name: 'Crunches', dayNumber: 4, equipment: 'Bodyweight', location: 'Anywhere',
+    variations: [
+      { name: 'Standard', default: true },
+      { name: 'Weighted', targetWeight: 10, targetReps: 15, targetSets: 3 },
+      { name: 'Bicycle', targetReps: 20, targetSets: 3 },
+    ],
+  },
+  {
+    name: 'Under Leg Crunches', dayNumber: 4, equipment: 'Bodyweight', location: 'Anywhere',
+    variations: [
+      { name: 'Standard', default: true },
+    ],
+  },
+
+  // ── Day 5: Compound Pulls ──
+  {
+    name: 'Lat Pulldowns', dayNumber: 5, equipment: 'Cable Machine', location: 'Home',
+    variations: [
+      { name: 'Wide Grip', targetWeight: 40, targetReps: 12, targetSets: 3, default: true },
+      { name: 'Close Grip', targetWeight: 45, targetReps: 12, targetSets: 3 },
+      { name: 'Reverse Grip', targetWeight: 35, targetReps: 12, targetSets: 3 },
+      { name: 'Single Arm', targetWeight: 20, targetReps: 12, targetSets: 3 },
+    ],
+  },
+  {
+    name: 'Bent-Over Rows', dayNumber: 5, equipment: 'Barbell', location: 'Home',
+    variations: [
+      { name: 'Standard', targetWeight: 35, targetReps: 12, targetSets: 3, default: true },
+      { name: 'Underhand', targetWeight: 35, targetReps: 12, targetSets: 3 },
+    ],
+  },
+  {
+    name: 'Seated Cable Rows', dayNumber: 5, equipment: 'Cable Machine', location: 'Home',
+    variations: [
+      { name: 'Standard', targetWeight: 80, targetReps: 12, targetSets: 3, default: true },
+      { name: 'Wide Grip', targetWeight: 70, targetReps: 12, targetSets: 3 },
+      { name: 'Single Arm', targetWeight: 40, targetReps: 12, targetSets: 3 },
+    ],
+  },
+
+  // ── Day 6: Biceps ──
+  {
+    name: 'Dumbbell Bicep Curl', dayNumber: 6, equipment: 'Dumbbells', location: 'Home',
+    notes: 'Reps to failure, decrease weight by 5-10 each time',
+    variations: [
+      { name: 'Standard', targetWeight: 20, targetReps: 'Failure', targetSets: 3, default: true },
+      { name: 'Hammer', targetWeight: 20, targetReps: 'Failure', targetSets: 3 },
+      { name: 'Incline', targetWeight: 15, targetReps: 'Failure', targetSets: 3 },
+      { name: 'Concentration', targetWeight: 15, targetReps: 'Failure', targetSets: 3 },
+    ],
+  },
+  {
+    name: 'Cable Bicep Curl', dayNumber: 6, equipment: 'Cable Machine', location: 'Home',
+    notes: 'Reps to failure, decrease weight by 5-10 each time',
+    variations: [
+      { name: 'Standard', targetWeight: 20, targetReps: 'Failure', targetSets: 3, default: true },
+      { name: 'Rope Hammer', targetWeight: 20, targetReps: 'Failure', targetSets: 3 },
+      { name: 'Single Arm', targetWeight: 10, targetReps: 'Failure', targetSets: 3 },
+    ],
+  },
+
+  // ── Day 7: Torso ──
+  {
+    name: 'Torso Twist', dayNumber: 7, equipment: 'Torso Twist Machine', location: 'Gym',
+    notes: 'Max twist. One set is rotating from each side',
+    variations: [
+      { name: 'Standard', targetWeight: 90, targetReps: 20, targetSets: 3, default: true },
+    ],
+  },
+  {
+    name: 'Back Extension (Seated)', dayNumber: 7, equipment: 'Seated Back Extension Machine', location: 'Gym',
+    notes: 'Max range of motion',
+    variations: [
+      { name: 'Standard', targetWeight: 140, targetReps: 12, targetSets: 3, default: true },
+    ],
+  },
+  {
+    name: 'Hip Adductor', dayNumber: 7, equipment: 'Hip Adductor Machine', location: 'Gym',
+    notes: 'Max stretch. Involves static stretching and contractions',
+    variations: [
+      { name: 'Standard', targetWeight: 100, targetReps: 'Failure', targetSets: 3, default: true },
+    ],
+  },
+  {
+    name: 'Hip Abductor', dayNumber: 7, equipment: 'Hip Abductor Machine', location: 'Gym',
+    variations: [
+      { name: 'Standard', targetWeight: 80, targetReps: 'Failure', targetSets: 3, default: true },
+    ],
+  },
+  {
+    name: 'Situps', dayNumber: 7, equipment: 'Situp Device', location: 'Gym',
+    variations: [
+      { name: 'Standard', targetReps: 12, targetSets: 3, default: true },
+    ],
+  },
+
+  // ── Day 8: Pecs (Mobility) ──
+  {
+    name: 'Dumbbell Bench Press', dayNumber: 8, equipment: 'Dumbbells', location: 'Home',
+    notes: '⚠️ Light weight only for mobility',
+    variations: [
+      { name: 'Flat (Light)', targetWeight: 20, targetReps: 12, targetSets: 3, default: true },
+      { name: 'Incline (Light)', targetWeight: 15, targetReps: 12, targetSets: 3 },
+    ],
+  },
+  {
+    name: 'Cable Fly', dayNumber: 8, equipment: 'Cable Machine', location: 'Home',
+    notes: '⚠️ Light weight, focus on stretch',
+    variations: [
+      { name: 'Standard', default: true },
+      { name: 'Low to High', },
+      { name: 'High to Low', },
+    ],
+  },
+  {
+    name: 'Static Hold (Lowered Position)', dayNumber: 8, equipment: 'Dumbbells', location: 'Home',
+    notes: '⚠️ Horizontal dumbbell hold in lowered position',
+    variations: [
+      { name: 'Standard', default: true },
+    ],
+  },
+
+  // ── Day 9: Compound Push ──
+  {
+    name: 'Barbell Bench Press', dayNumber: 9, equipment: 'Smith Machine', location: 'Gym',
+    variations: [
+      { name: 'Flat', targetWeight: 115, targetReps: 12, targetSets: 3, default: true },
+      { name: 'Incline', targetWeight: 95, targetReps: 12, targetSets: 3 },
+      { name: 'Decline', targetWeight: 105, targetReps: 10, targetSets: 3 },
+      { name: 'Close Grip', targetWeight: 85, targetReps: 12, targetSets: 3 },
+    ],
+  },
+  {
+    name: 'Dumbbell Bench Press', dayNumber: 9, equipment: 'Dumbbells', location: 'Home',
+    notes: 'Reps to failure, decreasing weight',
+    variations: [
+      { name: 'Flat', targetWeight: 20, targetReps: 12, targetSets: 3, default: true },
+      { name: 'Incline', targetWeight: 15, targetReps: 12, targetSets: 3 },
+      { name: 'Decline', targetWeight: 20, targetReps: 10, targetSets: 3 },
+    ],
+  },
+  {
+    name: 'Dips', dayNumber: 9, equipment: 'Dip Machine', location: 'Gym',
+    variations: [
+      { name: 'Assisted', targetWeight: -90, targetReps: '15-20', targetSets: 3, default: true },
+      { name: 'Bodyweight', targetReps: '8-12', targetSets: 3 },
+    ],
+  },
+  {
+    name: 'Shoulder Press', dayNumber: 9, equipment: 'Dumbbells', location: 'Home',
+    variations: [
+      { name: 'Seated', targetWeight: 15, targetReps: 12, targetSets: 3, default: true },
+      { name: 'Standing', targetWeight: 15, targetReps: 10, targetSets: 3 },
+      { name: 'Arnold Press', targetWeight: 12, targetReps: 12, targetSets: 3 },
+    ],
+  },
+
+  // ── Day 10: Triceps ──
+  {
+    name: 'Cable Standing High Cross', dayNumber: 10, equipment: 'Cable Machine', location: 'Home',
+    variations: [
+      { name: 'Standard', default: true },
+    ],
+  },
+  {
+    name: 'Tricep Pushdown', dayNumber: 10, equipment: 'Cable Machine', location: 'Home',
+    variations: [
+      { name: 'Rope', default: true },
+      { name: 'V-Bar' },
+      { name: 'Straight Bar' },
+      { name: 'Single Arm' },
+    ],
+  },
+  {
+    name: 'Tricep Extension (Katana)', dayNumber: 10, equipment: 'Dumbbell', location: 'Home',
+    variations: [
+      { name: 'Standard', targetWeight: 10, default: true },
+      { name: 'Overhead', targetWeight: 10 },
+    ],
+  },
+
+  // ── Day 11: Deltoids ──
+  {
+    name: 'Reverse Delt Cable Fly', dayNumber: 11, equipment: 'Cable Machine', location: 'Home',
+    variations: [
+      { name: 'Standard', default: true },
+      { name: 'High Pulley' },
+      { name: 'Low Pulley' },
+    ],
+  },
+  {
+    name: 'Side Delt Cable Raises', dayNumber: 11, equipment: 'Cable Machine', location: 'Home',
+    variations: [
+      { name: 'Standard', default: true },
+      { name: 'Behind the Back' },
+    ],
+  },
+  {
+    name: 'Front Deltoid Raises (Bottom to Top)', dayNumber: 11, equipment: 'Cable Machine', location: 'Home',
+    variations: [
+      { name: 'Standard', default: true },
+    ],
+  },
+  {
+    name: 'Front Deltoid Raises (Top to Bottom)', dayNumber: 11, equipment: 'Cable Machine', location: 'Home',
+    variations: [
+      { name: 'Standard', default: true },
+    ],
+  },
+  {
+    name: 'Rotator Cuff Work', dayNumber: 11, equipment: 'Light Weight', location: 'Home',
+    variations: [
+      { name: 'Internal Rotation', default: true },
+      { name: 'External Rotation' },
+    ],
+  },
+
+  // ── Day 12: Grip ──
+  {
+    name: 'Gripper - Trainer', dayNumber: 12, equipment: 'Hand Gripper', location: 'Home',
+    notes: 'Start with left/weak side',
+    variations: [
+      { name: 'Standard', targetReps: 'Failure', targetSets: 3, default: true },
+    ],
+  },
+  {
+    name: 'Gripper - Sport', dayNumber: 12, equipment: 'Hand Gripper', location: 'Home',
+    notes: 'Start with left/weak side',
+    variations: [
+      { name: 'Standard', targetReps: 'Failure', targetSets: 3, default: true },
+    ],
+  },
+  {
+    name: 'Gripper - Guide', dayNumber: 12, equipment: 'Hand Gripper', location: 'Home',
+    notes: 'Start with left/weak side',
+    variations: [
+      { name: 'Standard', targetReps: 'Failure', targetSets: 3, default: true },
+    ],
+  },
+  {
+    name: 'Wrist Curls', dayNumber: 12, equipment: 'Dumbbells', location: 'Home',
+    variations: [
+      { name: 'Pronated', targetWeight: 20, targetReps: 'Failure', targetSets: 3, default: true },
+      { name: 'Supinated', targetWeight: 20, targetReps: 'Failure', targetSets: 3 },
+    ],
+  },
 ];

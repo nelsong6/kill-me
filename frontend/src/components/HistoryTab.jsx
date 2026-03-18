@@ -830,7 +830,12 @@ export function HistoryTab({ onDayClick, onWorkoutClick, onCardioClick }) {
                           key={idx}
                           className="bg-slate-700/40 backdrop-blur-sm rounded-lg p-3 text-sm"
                         >
-                          <div className="font-bold text-slate-100 mb-1">{exercise.name}</div>
+                          <div className="font-bold text-slate-100 mb-1">
+                            {exercise.name}
+                            {exercise.variation && exercise.variation !== 'Standard' && (
+                              <span className="text-cyan-400 font-normal ml-1">({exercise.variation})</span>
+                            )}
+                          </div>
                           <div className="text-slate-400">
                             {exercise.weight && <span>{exercise.weight} lbs</span>}
                             {exercise.reps && <span> × {exercise.reps} reps</span>}

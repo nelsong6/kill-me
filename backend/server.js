@@ -188,13 +188,15 @@ async function startServer() {
   app.post('/api/log-workout', requireAuth, requireAdmin, async (req, res) => {
     try {
       const userId = req.user.sub;
-      const { dayNumber, dayName, mode, exercises: completedExercises } = req.body;
+      const { dayNumber, dayName, mode, date, exercises: completedExercises } = req.body;
 
       if (!dayNumber) {
         return res.status(400).json({ error: 'Missing required field: dayNumber' });
       }
 
-      const today = new Date().toISOString().split('T')[0];
+      // Prefer the client-supplied local date so the server timezone doesn't
+      // shift evening workouts to the next day.
+      const today = date || new Date().toISOString().split('T')[0];
 
       const workoutDoc = {
         id: `logged-workout-${today}-day${dayNumber}-${Date.now()}`,
@@ -328,6 +330,43 @@ async function startServer() {
     } catch (error) {
       console.error('Error updating current day:', error);
       res.status(500).json({ error: 'Failed to update current day', message: error.message });
+    }
+  });
+
+  // Add a new exercise to a day (admin only).
+  // Body: { dayNumber, name, equipment?, location?, notes?, variations? }
+  app.post('/api/exercises', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { dayNumber, name, equipment, location, notes, variations } = req.body;
+
+      if (!dayNumber || !name) {
+        return res.status(400).json({ error: 'Missing required fields: dayNumber and name' });
+      }
+      if (dayNumber < 1 || dayNumber > 12) {
+        return res.status(400).json({ error: 'Invalid day number. Must be between 1 and 12.' });
+      }
+
+      const id = `exercise-${dayNumber}-${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+
+      const exerciseDoc = {
+        id,
+        type: 'exercise',
+        dayNumber,
+        name,
+        equipment: equipment || '',
+        location: location || '',
+        notes: notes || '',
+        variations: variations && variations.length > 0
+          ? variations
+          : [{ name: 'Standard', default: true, targetWeight: null, targetReps: null, targetSets: null }],
+        createdAt: new Date().toISOString(),
+      };
+
+      const { resource } = await container.items.upsert(exerciseDoc);
+      res.status(201).json({ exercise: resource });
+    } catch (error) {
+      console.error('Error creating exercise:', error);
+      res.status(500).json({ error: 'Failed to create exercise', message: error.message });
     }
   });
 
@@ -513,6 +552,90 @@ async function startServer() {
     } catch (error) {
       console.error('Error seeding soreness data:', error);
       res.status(500).json({ error: 'Failed to seed soreness data', message: error.message });
+    }
+  });
+
+  // Migrate exercise documents to the variations model (admin only).
+  // For each exercise doc that has flat targetWeight/Reps/Sets and no `variations`
+  // array, wraps the targets into variations: [{ name: 'Standard', default: true, ... }].
+  // Also migrates logged workouts: adds `variation: 'Standard'` to any exercise
+  // entry in the exercises[] array that lacks a variation field.
+  // Idempotent — skips documents that already have the new shape.
+  app.post('/api/admin/migrate-exercise-variations', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const stats = { exercises: { found: 0, migrated: 0 }, workouts: { found: 0, migrated: 0 }, errors: [] };
+
+      // --- Migrate exercise documents ---
+      const exerciseQuery = {
+        query: 'SELECT * FROM c WHERE c.type = @type',
+        parameters: [{ name: '@type', value: 'exercise' }]
+      };
+      const { resources: exerciseDocs } = await container.items.query(exerciseQuery).fetchAll();
+      stats.exercises.found = exerciseDocs.length;
+
+      for (const doc of exerciseDocs) {
+        try {
+          if (doc.variations && Array.isArray(doc.variations)) continue;
+
+          const variation = { name: 'Standard', default: true };
+          if (doc.targetWeight != null) variation.targetWeight = doc.targetWeight;
+          if (doc.targetReps != null) variation.targetReps = doc.targetReps;
+          if (doc.targetSets != null) variation.targetSets = doc.targetSets;
+
+          const { _rid, _self, _etag, _attachments, _ts, ...cleanDoc } = doc;
+          delete cleanDoc.targetWeight;
+          delete cleanDoc.targetReps;
+          delete cleanDoc.targetSets;
+          cleanDoc.variations = [variation];
+
+          await container.items.upsert(cleanDoc);
+          stats.exercises.migrated++;
+        } catch (err) {
+          stats.errors.push({ id: doc.id, type: 'exercise', error: err.message });
+        }
+      }
+
+      // --- Migrate logged workout exercise entries ---
+      const workoutQuery = {
+        query: 'SELECT * FROM c WHERE c.type = @type',
+        parameters: [{ name: '@type', value: 'logged-workout' }]
+      };
+      const { resources: workoutDocs } = await container.items.query(workoutQuery).fetchAll();
+      stats.workouts.found = workoutDocs.length;
+
+      for (const doc of workoutDocs) {
+        try {
+          if (!doc.exercises || !Array.isArray(doc.exercises) || doc.exercises.length === 0) continue;
+
+          let needsUpdate = false;
+          const updatedExercises = doc.exercises.map(ex => {
+            if (!ex.variation) {
+              needsUpdate = true;
+              return { ...ex, variation: 'Standard' };
+            }
+            return ex;
+          });
+
+          if (!needsUpdate) continue;
+
+          const { _rid, _self, _etag, _attachments, _ts, ...cleanDoc } = doc;
+          cleanDoc.exercises = updatedExercises;
+          await container.items.upsert(cleanDoc);
+          stats.workouts.migrated++;
+        } catch (err) {
+          stats.errors.push({ id: doc.id, type: 'logged-workout', error: err.message });
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Migrated ${stats.exercises.migrated}/${stats.exercises.found} exercises, ${stats.workouts.migrated}/${stats.workouts.found} workouts`,
+        stats,
+        errors: stats.errors.length > 0 ? stats.errors : undefined,
+      });
+    } catch (error) {
+      console.error('Error migrating exercise variations:', error);
+      res.status(500).json({ error: 'Failed to migrate exercise variations', message: error.message });
     }
   });
 

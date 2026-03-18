@@ -8,13 +8,28 @@
 // Fetches workout day definitions and exercises from the backend.
 
 import { useState, useEffect } from 'react';
+import { todayLocal } from '../utils/dateUtils';
 import { motion, AnimatePresence } from 'framer-motion';
-import { apiFetch } from '../api/client.js';
 import { useDataSource } from '../api/snapshotContext.jsx';
 import { DAY_CONFIG } from '../utils/dayConfig.js';
 import { colors } from '../colors.js';
 
 const COMPOUND_DAYS = new Set([1, 5, 9]);
+
+// Get the default variation for an exercise, falling back to the first one.
+// Also handles pre-migration exercises that have flat targetWeight/Reps/Sets.
+function getDefaultVariation(exercise) {
+  const vars = exercise.variations;
+  if (!vars || !Array.isArray(vars) || vars.length === 0) {
+    return {
+      name: 'Standard',
+      targetWeight: exercise.targetWeight,
+      targetReps: exercise.targetReps,
+      targetSets: exercise.targetSets,
+    };
+  }
+  return vars.find(v => v.default) || vars[0];
+}
 
 const RECOVERY_NOTES = {
   1: 'Starts the cycle — systemic leg strength sets the recovery baseline',
@@ -25,7 +40,7 @@ const RECOVERY_NOTES = {
   12: 'Ends the cycle at near-zero CNS load before restarting',
 };
 
-export function TodayTab({ currentDay, isAdmin }) {
+export function TodayTab({ currentDay, isAdmin, onNavigateExercises }) {
   const [selectedDay, setSelectedDay] = useState(currentDay);
   const [mode, setMode] = useState('quick');
   const [workoutDay, setWorkoutDay] = useState(null);
@@ -55,13 +70,17 @@ export function TodayTab({ currentDay, isAdmin }) {
         setExercises(exercisesData.exercises || []);
 
         setCompletedExercises(
-          (exercisesData.exercises || []).map(ex => ({
-            name: ex.name,
-            completed: false,
-            weight: ex.targetWeight || '',
-            reps: ex.targetReps || '',
-            sets: ex.targetSets || ''
-          }))
+          (exercisesData.exercises || []).map(ex => {
+            const dv = getDefaultVariation(ex);
+            return {
+              name: ex.name,
+              variation: dv.name,
+              completed: false,
+              weight: dv.targetWeight || '',
+              reps: dv.targetReps || '',
+              sets: dv.targetSets || '',
+            };
+          })
         );
       } catch (error) {
         console.error('Error fetching workout data:', error);
@@ -84,7 +103,8 @@ export function TodayTab({ currentDay, isAdmin }) {
         body: JSON.stringify({
           dayNumber: selectedDay,
           dayName: workoutDay?.name || `Day ${selectedDay}`,
-          mode: 'quick'
+          mode: 'quick',
+          date: todayLocal()
         })
       });
       setSuccess(true);
@@ -111,18 +131,23 @@ export function TodayTab({ currentDay, isAdmin }) {
           dayNumber: selectedDay,
           dayName: workoutDay?.name || `Day ${selectedDay}`,
           mode: 'detailed',
+          date: todayLocal(),
           exercises: completed
         })
       });
       setSuccess(true);
       setCompletedExercises(
-        exercises.map(ex => ({
-          name: ex.name,
-          completed: false,
-          weight: ex.targetWeight || '',
-          reps: ex.targetReps || '',
-          sets: ex.targetSets || ''
-        }))
+        exercises.map(ex => {
+          const dv = getDefaultVariation(ex);
+          return {
+            name: ex.name,
+            variation: dv.name,
+            completed: false,
+            weight: dv.targetWeight || '',
+            reps: dv.targetReps || '',
+            sets: dv.targetSets || '',
+          };
+        })
       );
       setTimeout(() => setSuccess(false), 3000);
     } catch (error) {
@@ -312,33 +337,61 @@ export function TodayTab({ currentDay, isAdmin }) {
                 Exercises
               </h3>
               <div className="space-y-2">
-                {exercises.map((exercise, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between bg-slate-700/30 rounded-lg px-4 py-3 border border-slate-600/30"
-                  >
-                    <div>
-                      <span className="font-semibold text-slate-100">{exercise.name}</span>
-                      {exercise.equipment && (
-                        <span className="text-slate-500 text-sm ml-2">({exercise.equipment})</span>
-                      )}
-                      {exercise.notes && (
-                        <p className="text-slate-500 text-xs mt-0.5">{exercise.notes}</p>
+                {exercises.map((exercise, idx) => {
+                  const defaultVar = getDefaultVariation(exercise);
+                  const vars = exercise.variations || [];
+                  const hasMultipleVars = vars.length > 1;
+                  return (
+                    <div
+                      key={idx}
+                      className="bg-slate-700/30 rounded-lg px-4 py-3 border border-slate-600/30"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <button
+                            onClick={() => onNavigateExercises?.(selectedDay, exercise.name)}
+                            className="font-semibold text-slate-100 hover:text-cyan-400 transition-colors cursor-pointer bg-transparent border-none p-0 text-left"
+                          >
+                            {exercise.name}
+                          </button>
+                          {exercise.equipment && (
+                            <span className="text-slate-500 text-sm ml-2">({exercise.equipment})</span>
+                          )}
+                          {exercise.notes && (
+                            <p className="text-slate-500 text-xs mt-0.5">{exercise.notes}</p>
+                          )}
+                        </div>
+                        <div className="text-sm text-slate-400 flex gap-3 flex-shrink-0">
+                          {defaultVar.targetWeight && (
+                            <span>{defaultVar.targetWeight} lbs</span>
+                          )}
+                          {defaultVar.targetReps && (
+                            <span>{defaultVar.targetReps} reps</span>
+                          )}
+                          {defaultVar.targetSets && (
+                            <span>{defaultVar.targetSets} sets</span>
+                          )}
+                        </div>
+                      </div>
+                      {hasMultipleVars && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {vars.map((v, vi) => (
+                            <span
+                              key={vi}
+                              className={`text-xs px-2 py-0.5 rounded-full border ${
+                                v.default
+                                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                                  : 'bg-slate-700/50 text-slate-400 border-slate-600/40'
+                              }`}
+                            >
+                              {v.name}
+                            </span>
+                          ))}
+                        </div>
                       )}
                     </div>
-                    <div className="text-sm text-slate-400 flex gap-3 flex-shrink-0">
-                      {exercise.targetWeight && (
-                        <span>{exercise.targetWeight} lbs</span>
-                      )}
-                      {exercise.targetReps && (
-                        <span>{exercise.targetReps} reps</span>
-                      )}
-                      {exercise.targetSets && (
-                        <span>{exercise.targetSets} sets</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -431,18 +484,56 @@ export function TodayTab({ currentDay, isAdmin }) {
                                 className="mt-1 w-6 h-6 rounded bg-slate-800 border-slate-600 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-0 cursor-pointer"
                               />
                               <div className="flex-1">
-                                <h4 className="font-bold text-slate-100 mb-2">{exercise.name}</h4>
-                                <div className="text-sm text-slate-400 mb-3">
-                                  {exercises[idx]?.targetWeight && (
-                                    <span>Target: {exercises[idx].targetWeight} lbs</span>
+                                <h4 className="font-bold text-slate-100 mb-1">
+                                  {exercise.name}
+                                  {exercise.variation && exercise.variation !== 'Standard' && (
+                                    <span className="text-cyan-400 text-sm font-normal ml-2">({exercise.variation})</span>
                                   )}
-                                  {exercises[idx]?.targetReps && (
-                                    <span> x {exercises[idx].targetReps} reps</span>
-                                  )}
-                                  {exercises[idx]?.targetSets && (
-                                    <span> x {exercises[idx].targetSets} sets</span>
-                                  )}
-                                </div>
+                                </h4>
+                                {(() => {
+                                  const exDef = exercises[idx];
+                                  const vars = exDef?.variations || [];
+                                  const hasMultipleVars = vars.length > 1;
+                                  const selectedVar = vars.find(v => v.name === exercise.variation) || getDefaultVariation(exDef || {});
+                                  return (
+                                    <>
+                                      {hasMultipleVars && (
+                                        <div className="flex flex-wrap gap-1.5 mb-2">
+                                          {vars.map((v, vi) => (
+                                            <button
+                                              key={vi}
+                                              type="button"
+                                              onClick={() => {
+                                                updateExercise(idx, 'variation', v.name);
+                                                updateExercise(idx, 'weight', v.targetWeight || '');
+                                                updateExercise(idx, 'reps', v.targetReps || '');
+                                                updateExercise(idx, 'sets', v.targetSets || '');
+                                              }}
+                                              className={`text-xs px-2 py-0.5 rounded-full border cursor-pointer transition-all ${
+                                                exercise.variation === v.name
+                                                  ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                                                  : 'bg-slate-700/50 text-slate-400 border-slate-600/40 hover:border-slate-500'
+                                              }`}
+                                            >
+                                              {v.name}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                      <div className="text-sm text-slate-400 mb-3">
+                                        {selectedVar.targetWeight && (
+                                          <span>Target: {selectedVar.targetWeight} lbs</span>
+                                        )}
+                                        {selectedVar.targetReps && (
+                                          <span> x {selectedVar.targetReps} reps</span>
+                                        )}
+                                        {selectedVar.targetSets && (
+                                          <span> x {selectedVar.targetSets} sets</span>
+                                        )}
+                                      </div>
+                                    </>
+                                  );
+                                })()}
 
                                 {exercise.completed && (
                                   <div className="grid grid-cols-3 gap-2">
