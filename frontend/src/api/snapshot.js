@@ -104,6 +104,31 @@ export function getSorenessEntries(db) {
   return { entries };
 }
 
+// Get all cardio sessions, sorted by date descending
+export function getCardioSessions(db) {
+  const result = db.exec(
+    'SELECT id, date, activity, duration_minutes, notes, treadmill, bike, timestamp, created_at FROM cardio_sessions ORDER BY date DESC'
+  );
+
+  if (result.length === 0) {
+    return { sessions: [] };
+  }
+
+  const sessions = result[0].values.map(([id, date, activity, durationMinutes, notes, treadmill, bike, timestamp, createdAt]) => ({
+    id,
+    date,
+    activity,
+    durationMinutes,
+    notes,
+    treadmill: treadmill ? JSON.parse(treadmill) : null,
+    bike: bike ? JSON.parse(bike) : null,
+    timestamp,
+    createdAt,
+  }));
+
+  return { sessions };
+}
+
 // Get snapshot metadata (generated_at timestamp)
 export function getSnapshotMeta(db) {
   const result = db.exec('SELECT key, value FROM snapshot_meta');

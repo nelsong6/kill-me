@@ -14,35 +14,44 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { DAY_CONFIG } from '../utils/dayConfig';
+import { CARDIO_CONFIG } from '../utils/cardioConfig';
+import { formatIntervalSummary } from '../utils/cardioTemplates';
 import { useDataSource } from '../api/snapshotContext.jsx';
 import { dateToLocal } from '../utils/dateUtils';
 
-export function HistoryTab({ onDayClick, onWorkoutClick }) {
+export function HistoryTab({ onDayClick, onWorkoutClick, onCardioClick }) {
   const [view, setView] = useState('calendar'); // 'calendar' or 'list'
   const [calendarPeriod, setCalendarPeriod] = useState('month'); // 'week', 'month', or 'year'
   const [workouts, setWorkouts] = useState([]);
+  const [cardioSessions, setCardioSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
-  // Filter state: tracks which workout types (days 1-12) are enabled
-  const [enabledWorkoutTypes, setEnabledWorkoutTypes] = useState(
-    Object.fromEntries(Object.keys(DAY_CONFIG).map(day => [day, true]))
-  );
+  // Filter state: tracks which workout types (days 1-12) and cardio types are enabled
+  const [enabledWorkoutTypes, setEnabledWorkoutTypes] = useState({
+    ...Object.fromEntries(Object.keys(DAY_CONFIG).map(day => [day, true])),
+    treadmill: true,
+    bike: true,
+  });
   // Hover state: tracks which workout type is currently being hovered
   const [hoveredWorkoutType, setHoveredWorkoutType] = useState(null);
-  const { fetchWorkouts: fetchWorkoutsFromSource, isReady } = useDataSource();
+  const { fetchWorkouts: fetchWorkoutsFromSource, fetchCardioSessions, isReady } = useDataSource();
 
   useEffect(() => {
     if (!isReady) return;
-    loadWorkouts();
+    loadData();
   }, [isReady]);
 
-  const loadWorkouts = async () => {
+  const loadData = async () => {
     setLoading(true);
     try {
-      const data = await fetchWorkoutsFromSource();
-      setWorkouts(data.workouts || []);
+      const [workoutData, cardioData] = await Promise.all([
+        fetchWorkoutsFromSource(),
+        fetchCardioSessions(),
+      ]);
+      setWorkouts(workoutData.workouts || []);
+      setCardioSessions(cardioData.sessions || []);
     } catch (error) {
-      console.error('Error fetching workouts:', error);
+      console.error('Error fetching history:', error);
     } finally {
       setLoading(false);
     }
@@ -62,9 +71,23 @@ export function HistoryTab({ onDayClick, onWorkoutClick }) {
 
   const getWorkoutsForDate = (date) => {
     const dateString = dateToLocal(date);
-    return workouts.filter(w => 
+    return workouts.filter(w =>
       w.date === dateString && enabledWorkoutTypes[w.dayNumber]
     );
+  };
+
+  const getCardioForDate = (date) => {
+    const dateString = dateToLocal(date);
+    return cardioSessions.filter(s =>
+      s.date === dateString && enabledWorkoutTypes[s.activity]
+    );
+  };
+
+  // Combined items for a date (workouts + cardio), each tagged with a kind
+  const getItemsForDate = (date) => {
+    const w = getWorkoutsForDate(date).map(item => ({ ...item, _kind: 'workout' }));
+    const c = getCardioForDate(date).map(item => ({ ...item, _kind: 'cardio' }));
+    return [...w, ...c];
   };
 
   const changeMonth = (direction) => {
@@ -101,9 +124,10 @@ export function HistoryTab({ onDayClick, onWorkoutClick }) {
     // Always allow navigating forward up to the current date
     if (endOfCurrentPeriod < new Date()) return true;
 
-    return workouts.some(w => {
-      const workoutDate = new Date(w.date);
-      return workoutDate > endOfCurrentPeriod;
+    const allItems = [...workouts, ...cardioSessions];
+    return allItems.some(w => {
+      const itemDate = new Date(w.date);
+      return itemDate > endOfCurrentPeriod;
     });
   };
 
@@ -117,10 +141,11 @@ export function HistoryTab({ onDayClick, onWorkoutClick }) {
       startOfCurrentPeriod.setMonth(0);
       startOfCurrentPeriod.setDate(1);
     }
-    
-    return workouts.some(w => {
-      const workoutDate = new Date(w.date);
-      return workoutDate < startOfCurrentPeriod;
+
+    const allItems = [...workouts, ...cardioSessions];
+    return allItems.some(w => {
+      const itemDate = new Date(w.date);
+      return itemDate < startOfCurrentPeriod;
     });
   };
 
@@ -137,6 +162,40 @@ export function HistoryTab({ onDayClick, onWorkoutClick }) {
     return DAY_CONFIG[dayNumber]?.color || 'bg-slate-500';
   };
 
+  // Get color for any calendar item (workout or cardio)
+  const getItemColor = (item) => {
+    if (item._kind === 'cardio') return null; // uses inline style
+    return getDayColor(item.dayNumber);
+  };
+
+  const getItemColorStyle = (item) => {
+    if (item._kind === 'cardio') {
+      return { backgroundColor: CARDIO_CONFIG[item.activity]?.color || '#10b981' };
+    }
+    return {};
+  };
+
+  const getItemFilterKey = (item) => {
+    if (item._kind === 'cardio') return item.activity;
+    return item.dayNumber.toString();
+  };
+
+  const getItemTitle = (item) => {
+    if (item._kind === 'cardio') {
+      const cfg = CARDIO_CONFIG[item.activity];
+      return `${cfg?.name || item.activity}${item.durationMinutes ? ` — ${item.durationMinutes} min` : ''}`;
+    }
+    return `Day ${item.dayNumber}: ${item.dayName}`;
+  };
+
+  const handleItemClick = (item) => {
+    if (item._kind === 'cardio') {
+      onCardioClick?.(item);
+    } else {
+      onWorkoutClick?.(item);
+    }
+  };
+
   const toggleWorkoutType = (dayNumber) => {
     setEnabledWorkoutTypes(prev => ({
       ...prev,
@@ -145,15 +204,19 @@ export function HistoryTab({ onDayClick, onWorkoutClick }) {
   };
 
   const enableAllWorkoutTypes = () => {
-    setEnabledWorkoutTypes(
-      Object.fromEntries(Object.keys(DAY_CONFIG).map(day => [day, true]))
-    );
+    setEnabledWorkoutTypes({
+      ...Object.fromEntries(Object.keys(DAY_CONFIG).map(day => [day, true])),
+      treadmill: true,
+      bike: true,
+    });
   };
 
   const disableAllWorkoutTypes = () => {
-    setEnabledWorkoutTypes(
-      Object.fromEntries(Object.keys(DAY_CONFIG).map(day => [day, false]))
-    );
+    setEnabledWorkoutTypes({
+      ...Object.fromEntries(Object.keys(DAY_CONFIG).map(day => [day, false])),
+      treadmill: false,
+      bike: false,
+    });
   };
 
   if (loading) {
@@ -202,22 +265,26 @@ export function HistoryTab({ onDayClick, onWorkoutClick }) {
 
       {/* Stats Card */}
       <div className="bg-gradient-to-r from-cyan-500/20 to-blue-600/20 backdrop-blur-md rounded-2xl border border-cyan-500/50 p-4 sm:p-6">
-        <div className="grid grid-cols-3 gap-2 sm:gap-4 text-center">
+        <div className="grid grid-cols-4 gap-2 sm:gap-4 text-center">
           <div>
             <div className="text-2xl sm:text-4xl font-black text-white">{workouts.length}</div>
-            <div className="text-slate-300 text-[10px] sm:text-sm uppercase tracking-wide">Total Workouts</div>
+            <div className="text-slate-300 text-[10px] sm:text-sm uppercase tracking-wide">Workouts</div>
+          </div>
+          <div>
+            <div className="text-2xl sm:text-4xl font-black text-white">{cardioSessions.length}</div>
+            <div className="text-slate-300 text-[10px] sm:text-sm uppercase tracking-wide">Cardio</div>
           </div>
           <div>
             <div className="text-2xl sm:text-4xl font-black text-white">
-              {new Set(workouts.map(w => w.date)).size}
+              {new Set([...workouts.map(w => w.date), ...cardioSessions.map(s => s.date)]).size}
             </div>
-            <div className="text-slate-300 text-[10px] sm:text-sm uppercase tracking-wide">Days Logged</div>
+            <div className="text-slate-300 text-[10px] sm:text-sm uppercase tracking-wide">Days Active</div>
           </div>
           <div>
             <div className="text-2xl sm:text-4xl font-black text-white">
               {new Set(workouts.map(w => w.dayNumber)).size}
             </div>
-            <div className="text-slate-300 text-[10px] sm:text-sm uppercase tracking-wide">Different Days</div>
+            <div className="text-slate-300 text-[10px] sm:text-sm uppercase tracking-wide">Cycle Days</div>
           </div>
         </div>
       </div>
@@ -328,15 +395,15 @@ export function HistoryTab({ onDayClick, onWorkoutClick }) {
                   for (let i = 0; i < 7; i++) {
                     const date = new Date(startOfWeek);
                     date.setDate(startOfWeek.getDate() + i);
-                    const dayWorkouts = getWorkoutsForDate(date);
+                    const dayItems = getItemsForDate(date);
                     const isToday = date.toDateString() === new Date().toDateString();
                     const isCurrentMonth = date.getMonth() === selectedMonth.getMonth();
 
                     days.push(
                       <div
                         key={i}
-                        onClick={() => dayWorkouts.length > 0
-                          ? onWorkoutClick?.(dayWorkouts[0])
+                        onClick={() => dayItems.length > 0
+                          ? handleItemClick(dayItems[0])
                           : onDayClick?.(null, dateToLocal(date))
                         }
                         className={`min-h-[80px] sm:min-h-[120px] rounded-lg sm:rounded-xl border transition-all overflow-hidden cursor-pointer hover:scale-105 ${
@@ -347,16 +414,17 @@ export function HistoryTab({ onDayClick, onWorkoutClick }) {
                             : 'border-slate-800'
                         }`}
                       >
-                        {dayWorkouts.length > 0 ? (
+                        {dayItems.length > 0 ? (
                           <div className="h-full flex flex-col relative">
-                            {dayWorkouts.map((workout, idx) => (
+                            {dayItems.map((item, idx) => (
                               <div
                                 key={idx}
-                                className={`${getDayColor(workout.dayNumber)} flex-1 transition-opacity ${
-                                  idx < dayWorkouts.length - 1 ? 'border-b border-black/20' : ''
-                                } ${hoveredWorkoutType && hoveredWorkoutType !== workout.dayNumber.toString() ? 'opacity-30' : 'opacity-100'}`}
-                                title={`Day ${workout.dayNumber}: ${workout.dayName} - Click to log this day`}
-                                onMouseEnter={() => setHoveredWorkoutType(workout.dayNumber.toString())}
+                                className={`${getItemColor(item) || ''} flex-1 transition-opacity ${
+                                  idx < dayItems.length - 1 ? 'border-b border-black/20' : ''
+                                } ${hoveredWorkoutType && hoveredWorkoutType !== getItemFilterKey(item) ? 'opacity-30' : 'opacity-100'}`}
+                                style={getItemColorStyle(item)}
+                                title={getItemTitle(item)}
+                                onMouseEnter={() => setHoveredWorkoutType(getItemFilterKey(item))}
                                 onMouseLeave={() => setHoveredWorkoutType(null)}
                               />
                             ))}
@@ -414,14 +482,14 @@ export function HistoryTab({ onDayClick, onWorkoutClick }) {
                 // Days of the month
                 for (let day = 1; day <= daysInMonth; day++) {
                   const date = new Date(year, month, day);
-                  const dayWorkouts = getWorkoutsForDate(date);
+                  const dayItems = getItemsForDate(date);
                   const isToday = date.toDateString() === new Date().toDateString();
 
                   days.push(
                     <div
                       key={day}
-                      onClick={() => dayWorkouts.length > 0
-                        ? onWorkoutClick?.(dayWorkouts[0])
+                      onClick={() => dayItems.length > 0
+                        ? handleItemClick(dayItems[0])
                         : onDayClick?.(null, dateToLocal(date))
                       }
                       className={`h-14 sm:h-20 rounded-md sm:rounded-lg border transition-all overflow-hidden cursor-pointer hover:scale-105 ${
@@ -430,16 +498,17 @@ export function HistoryTab({ onDayClick, onWorkoutClick }) {
                           : 'border-slate-700 hover:border-slate-600'
                       }`}
                     >
-                      {dayWorkouts.length > 0 ? (
+                      {dayItems.length > 0 ? (
                         <div className="h-full flex flex-col relative">
-                          {dayWorkouts.map((workout, idx) => (
+                          {dayItems.map((item, idx) => (
                             <div
                               key={idx}
-                              className={`${getDayColor(workout.dayNumber)} flex-1 transition-opacity ${
-                                idx < dayWorkouts.length - 1 ? 'border-b border-black/20' : ''
-                              } ${hoveredWorkoutType && hoveredWorkoutType !== workout.dayNumber.toString() ? 'opacity-30' : 'opacity-100'}`}
-                              title={`Day ${workout.dayNumber}: ${workout.dayName} - Click to log this day`}
-                              onMouseEnter={() => setHoveredWorkoutType(workout.dayNumber.toString())}
+                              className={`${getItemColor(item) || ''} flex-1 transition-opacity ${
+                                idx < dayItems.length - 1 ? 'border-b border-black/20' : ''
+                              } ${hoveredWorkoutType && hoveredWorkoutType !== getItemFilterKey(item) ? 'opacity-30' : 'opacity-100'}`}
+                              style={getItemColorStyle(item)}
+                              title={getItemTitle(item)}
+                              onMouseEnter={() => setHoveredWorkoutType(getItemFilterKey(item))}
                               onMouseLeave={() => setHoveredWorkoutType(null)}
                             />
                           ))}
@@ -452,7 +521,6 @@ export function HistoryTab({ onDayClick, onWorkoutClick }) {
                         <div className={`h-full relative ${
                           isToday ? 'bg-cyan-500/10' : 'bg-slate-800/20'
                         }`}>
-                          {/* Day number - same style as workout days */}
                           <div className="absolute top-0.5 left-1 sm:top-1 sm:left-2 text-slate-200 font-black text-xs sm:text-lg">
                             {day}
                           </div>
@@ -508,33 +576,41 @@ export function HistoryTab({ onDayClick, onWorkoutClick }) {
                       {/* Days of the month */}
                       {Array.from({ length: daysInMonth }, (_, day) => {
                         const date = new Date(selectedMonth.getFullYear(), monthIndex, day + 1);
-                        const dayWorkouts = getWorkoutsForDate(date);
+                        const dayItems = getItemsForDate(date);
                         const isToday = date.toDateString() === new Date().toDateString();
+
+                        // For year view color, pick the first item's color
+                        const firstItem = dayItems[0];
+                        const yearCellClass = firstItem
+                          ? (firstItem._kind === 'cardio' ? '' : `${getDayColor(firstItem.dayNumber)} text-white hover:ring-white/50`)
+                          : 'bg-slate-800/40 text-slate-500 hover:bg-slate-700/40';
+                        const yearCellStyle = firstItem?._kind === 'cardio'
+                          ? { backgroundColor: CARDIO_CONFIG[firstItem.activity]?.color || '#10b981', color: 'white' }
+                          : {};
 
                         return (
                           <div
                             key={day}
                             onClick={(e) => {
                               e.stopPropagation();
-                              dayWorkouts.length > 0
-                                ? onWorkoutClick?.(dayWorkouts[0])
+                              dayItems.length > 0
+                                ? handleItemClick(dayItems[0])
                                 : onDayClick?.(null, dateToLocal(date));
                             }}
                             className={`aspect-square rounded-sm flex items-center justify-center text-[9px] font-bold transition-all cursor-pointer hover:scale-110 hover:ring-1 hover:ring-white/30 ${
                               isToday
                                 ? 'bg-cyan-500 text-white ring-1 ring-cyan-400'
-                                : dayWorkouts.length > 0
-                                ? `${getDayColor(dayWorkouts[0].dayNumber)} text-white hover:ring-white/50`
-                                : 'bg-slate-800/40 text-slate-500 hover:bg-slate-700/40'
+                                : yearCellClass
                             }`}
+                            style={!isToday ? yearCellStyle : {}}
                             title={
-                              dayWorkouts.length > 0
-                                ? dayWorkouts.map(w => `Day ${w.dayNumber}: ${w.dayName}`).join(', ') + ' - Click to log workout'
-                                : 'Click to log workout'
+                              dayItems.length > 0
+                                ? dayItems.map(getItemTitle).join(', ')
+                                : 'Click to log'
                             }
                           >
-                            {dayWorkouts.length > 1 ? (
-                              <span className="text-[7px]">●{dayWorkouts.length}</span>
+                            {dayItems.length > 1 ? (
+                              <span className="text-[7px]">●{dayItems.length}</span>
                             ) : (
                               day + 1
                             )}
@@ -601,6 +677,40 @@ export function HistoryTab({ onDayClick, onWorkoutClick }) {
                   </button>
                 );
               })}
+
+              {/* Cardio filters */}
+              <div className="col-span-2 sm:col-span-3 lg:col-span-4 mt-2 pt-2 border-t border-slate-700/50">
+                <p className="text-slate-400 text-[10px] font-bold uppercase tracking-wide mb-1.5">Cardio</p>
+              </div>
+              {Object.entries(CARDIO_CONFIG).map(([key, config]) => {
+                const isEnabled = enabledWorkoutTypes[key];
+                const isDimmed = hoveredWorkoutType && hoveredWorkoutType !== key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => toggleWorkoutType(key)}
+                    className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border transition-all ${
+                      isEnabled
+                        ? 'border-slate-600 bg-slate-700/40 hover:bg-slate-700/60'
+                        : 'border-slate-800 bg-slate-900/40 opacity-40 hover:opacity-60'
+                    } ${isDimmed ? 'opacity-30' : ''}`}
+                    title={`Click to ${isEnabled ? 'hide' : 'show'} ${config.name}`}
+                  >
+                    <div
+                      className="w-4 h-4 rounded-full flex-shrink-0 transition-all"
+                      style={{ backgroundColor: config.color, filter: isEnabled ? 'none' : 'grayscale(1)' }}
+                    />
+                    <div className="text-left flex-1">
+                      <div className={`font-bold ${isEnabled ? 'text-slate-200' : 'text-slate-600'}`}>
+                        {config.name}
+                      </div>
+                    </div>
+                    <div className={`text-lg ${isEnabled ? 'text-green-400' : 'text-slate-700'}`}>
+                      {isEnabled ? '✓' : '○'}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </motion.div>
@@ -613,60 +723,127 @@ export function HistoryTab({ onDayClick, onWorkoutClick }) {
           animate={{ opacity: 1 }}
           className="space-y-4"
         >
-          {workouts.length === 0 ? (
-            <div className="bg-slate-800/20 backdrop-blur-sm rounded-2xl p-16 text-center border-2 border-dashed border-slate-700">
-              <div className="text-8xl mb-6 opacity-50">🏋️</div>
-              <p className="text-slate-300 text-2xl font-bold mb-3">No Workouts Yet</p>
-              <p className="text-slate-500 text-lg">Start your journey by logging your first session</p>
-            </div>
-          ) : (
-            workouts.map(workout => (
-              <div
-                key={workout.id}
-                onClick={() => onWorkoutClick?.(workout)}
-                className="bg-slate-800/30 backdrop-blur-md rounded-xl border border-slate-700/50 p-6 hover:border-slate-600 transition-all cursor-pointer hover:scale-[1.02]"
-                title="View workout details"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className={`${getDayColor(workout.dayNumber)} text-white text-sm font-bold px-3 py-1 rounded-full`}>
-                        Day {workout.dayNumber}
-                      </span>
-                      <span className="text-slate-300 font-bold text-lg">
-                        {workout.dayName}
-                      </span>
-                      {workout.mode && (
-                        <span className="text-slate-500 text-sm">
-                          {workout.mode === 'quick' ? '⚡' : '📋'} {workout.mode}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-slate-400 text-sm">{formatDate(workout.date)}</p>
-                  </div>
-                </div>
+          {(() => {
+            // Merge workouts and cardio, sort by date descending
+            const allItems = [
+              ...workouts.filter(w => enabledWorkoutTypes[w.dayNumber]).map(w => ({ ...w, _kind: 'workout' })),
+              ...cardioSessions.filter(s => enabledWorkoutTypes[s.activity]).map(s => ({ ...s, _kind: 'cardio' })),
+            ].sort((a, b) => b.date.localeCompare(a.date));
 
-                {/* Exercises (if detailed mode) */}
-                {workout.exercises && workout.exercises.length > 0 && (
-                  <div className="mt-4 space-y-2">
-                    {workout.exercises.map((exercise, idx) => (
-                      <div
-                        key={idx}
-                        className="bg-slate-700/40 backdrop-blur-sm rounded-lg p-3 text-sm"
-                      >
-                        <div className="font-bold text-slate-100 mb-1">{exercise.name}</div>
-                        <div className="text-slate-400">
-                          {exercise.weight && <span>{exercise.weight} lbs</span>}
-                          {exercise.reps && <span> × {exercise.reps} reps</span>}
-                          {exercise.sets && <span> × {exercise.sets} sets</span>}
+            if (allItems.length === 0) {
+              return (
+                <div className="bg-slate-800/20 backdrop-blur-sm rounded-2xl p-16 text-center border-2 border-dashed border-slate-700">
+                  <div className="text-8xl mb-6 opacity-50">🏋️</div>
+                  <p className="text-slate-300 text-2xl font-bold mb-3">No Activity Yet</p>
+                  <p className="text-slate-500 text-lg">Start your journey by logging your first session</p>
+                </div>
+              );
+            }
+
+            return allItems.map(item => {
+              if (item._kind === 'cardio') {
+                const config = CARDIO_CONFIG[item.activity] || CARDIO_CONFIG.treadmill;
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => onCardioClick?.(item)}
+                    className="bg-slate-800/30 backdrop-blur-md rounded-xl border border-slate-700/50 p-6 hover:border-slate-600 transition-all cursor-pointer hover:scale-[1.02]"
+                    title="View cardio session"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <div className="flex items-center gap-3 mb-2">
+                          <span
+                            className="text-white text-sm font-bold px-3 py-1 rounded-full"
+                            style={{ backgroundColor: config.color }}
+                          >
+                            {config.name}
+                          </span>
+                          {item.durationMinutes && (
+                            <span className="text-slate-300 font-bold text-lg">
+                              {item.durationMinutes} min
+                            </span>
+                          )}
                         </div>
+                        <p className="text-slate-400 text-sm">{formatDate(item.date)}</p>
                       </div>
-                    ))}
+                    </div>
+
+                    {/* Treadmill interval summary */}
+                    {item.treadmill?.intervals && (
+                      <div className="mt-2 text-sm text-slate-400">
+                        {formatIntervalSummary(item.treadmill.intervals)}
+                        {item.treadmill.templateName && (
+                          <span className="ml-2 text-slate-500">({item.treadmill.templateName})</span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Bike metrics */}
+                    {item.bike && (
+                      <div className="mt-2 flex gap-4 text-sm text-slate-400">
+                        {item.bike.distanceMiles && <span>{item.bike.distanceMiles} mi</span>}
+                        {item.bike.avgSpeedMph && <span>{item.bike.avgSpeedMph} mph avg</span>}
+                        {item.bike.avgHeartRate && <span>{item.bike.avgHeartRate} bpm</span>}
+                        {item.bike.calories && <span>{item.bike.calories} cal</span>}
+                      </div>
+                    )}
+
+                    {item.notes && (
+                      <p className="mt-2 text-sm text-slate-500 italic">{item.notes}</p>
+                    )}
                   </div>
-                )}
-              </div>
-            ))
-          )}
+                );
+              }
+
+              // Weight workout card (existing)
+              return (
+                <div
+                  key={item.id}
+                  onClick={() => onWorkoutClick?.(item)}
+                  className="bg-slate-800/30 backdrop-blur-md rounded-xl border border-slate-700/50 p-6 hover:border-slate-600 transition-all cursor-pointer hover:scale-[1.02]"
+                  title="View workout details"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className={`${getDayColor(item.dayNumber)} text-white text-sm font-bold px-3 py-1 rounded-full`}>
+                          Day {item.dayNumber}
+                        </span>
+                        <span className="text-slate-300 font-bold text-lg">
+                          {item.dayName}
+                        </span>
+                        {item.mode && (
+                          <span className="text-slate-500 text-sm">
+                            {item.mode === 'quick' ? '⚡' : '📋'} {item.mode}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-slate-400 text-sm">{formatDate(item.date)}</p>
+                    </div>
+                  </div>
+
+                  {item.exercises && item.exercises.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      {item.exercises.map((exercise, idx) => (
+                        <div
+                          key={idx}
+                          className="bg-slate-700/40 backdrop-blur-sm rounded-lg p-3 text-sm"
+                        >
+                          <div className="font-bold text-slate-100 mb-1">{exercise.name}</div>
+                          <div className="text-slate-400">
+                            {exercise.weight && <span>{exercise.weight} lbs</span>}
+                            {exercise.reps && <span> × {exercise.reps} reps</span>}
+                            {exercise.sets && <span> × {exercise.sets} sets</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            });
+          })()}
         </motion.div>
       )}
     </div>

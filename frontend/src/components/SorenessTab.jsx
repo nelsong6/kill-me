@@ -13,6 +13,7 @@ import { MUSCLE_TAXONOMY, MUSCLE_GROUPS, searchMuscles } from '../utils/muscleTa
 import { todayLocal } from '../utils/dateUtils';
 import { AnatomyDiagram } from './AnatomyDiagrams';
 import { colors } from '../colors';
+import { Wrench } from 'lucide-react';
 
 // Map soreness levels to colors (green → yellow → red gradient)
 function getLevelColor(level) {
@@ -40,11 +41,23 @@ function formatDate(dateStr) {
 // Alias for readability within this component
 const todayStr = todayLocal;
 
+function useIsMobile(breakpoint = 640) {
+  const [mobile, setMobile] = useState(() => window.innerWidth < breakpoint);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+    const handler = (e) => setMobile(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [breakpoint]);
+  return mobile;
+}
+
 export function SorenessTab({ isAdmin }) {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { fetchSoreness, isReady } = useDataSource();
+  const isMobile = useIsMobile();
 
   // Editor state
   const [editing, setEditing] = useState(false);
@@ -59,7 +72,8 @@ export function SorenessTab({ isAdmin }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredMuscle, setHoveredMuscle] = useState(null); // { group, muscle } for diagram highlight
 
-  // List view — hovered pill state drives the anatomy diagram panel
+  // List view — pinned muscle stays visible; hover temporarily overrides
+  const [pinnedMuscle, setPinnedMuscle] = useState(null); // { group, muscle }
   const [listHover, setListHover] = useState(null); // { group, muscle }
 
   // Fetch entries
@@ -160,7 +174,7 @@ export function SorenessTab({ isAdmin }) {
   // Editor view
   if (editing && isAdmin) {
     return (
-      <div style={{ maxWidth: 960 }}>
+      <div style={{ maxWidth: 960, overflowX: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
           <button onClick={() => setEditing(false)} style={styles.backBtn}>
             &larr; Back
@@ -181,8 +195,8 @@ export function SorenessTab({ isAdmin }) {
           />
         </div>
 
-        {/* Two-column layout: left = muscles + picker, right = anatomy diagram */}
-        <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+        {/* Two-column layout: left = muscles + picker, right = anatomy diagram (single column on mobile) */}
+        <div style={{ display: 'flex', gap: isMobile ? 16 : 24, alignItems: 'flex-start', overflowX: isMobile ? 'auto' : undefined }}>
           {/* Left column — muscle list + picker */}
           <div style={{ flex: 1, minWidth: 0 }}>
             {/* Current muscles */}
@@ -192,7 +206,10 @@ export function SorenessTab({ isAdmin }) {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {editMuscles.map((m, i) => (
-                    <div key={`${m.group}-${m.muscle || 'group'}`} style={styles.muscleEntry}>
+                    <div key={`${m.group}-${m.muscle || 'group'}`} style={{
+                      ...styles.muscleEntry,
+                      ...(isMobile ? { flexWrap: 'wrap', gap: 8, padding: '8px 10px' } : {}),
+                    }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 14, color: colors.text.primary, fontWeight: 600 }}>
                           {m.muscle || m.group}
@@ -265,7 +282,7 @@ export function SorenessTab({ isAdmin }) {
 
           {/* Right column — anatomy diagram, shown when picker is open and a group is active */}
           {pickerOpen && diagramGroup && (
-            <div style={styles.diagramPanel}>
+            <div style={{ ...styles.diagramPanel, ...(isMobile ? { width: 220, flexShrink: 0 } : {}) }}>
               <AnatomyDiagram group={diagramGroup} highlightMuscle={hoveredMuscle?.muscle} />
               {hoveredMuscle?.muscle && (
                 <div style={{ textAlign: 'center', marginTop: 8 }}>
@@ -286,13 +303,15 @@ export function SorenessTab({ isAdmin }) {
     );
   }
 
-  const listDiagramGroup = listHover?.group;
+  // Active muscle for the diagram: hover takes priority, then pinned
+  const activeMuscle = listHover || pinnedMuscle;
+  const activeDiagramGroup = activeMuscle?.group;
 
   // List view
   return (
-    <div style={{ maxWidth: 960, display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+    <div style={{ maxWidth: isMobile ? undefined : 960, display: 'flex', gap: isMobile ? 16 : 24, alignItems: 'flex-start', overflowX: 'auto' }}>
       {/* Left column — entry list */}
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: '1 0 auto', minWidth: 0, ...(isMobile ? { width: 'calc(100vw - 80px)' } : {}) }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <div>
             <h2 style={styles.heading}>Soreness Journal</h2>
@@ -318,41 +337,59 @@ export function SorenessTab({ isAdmin }) {
                 key={entry.date}
                 style={{
                   ...styles.entryRow,
-                  cursor: isAdmin ? 'pointer' : 'default',
+                  ...(isMobile ? { flexDirection: 'column', alignItems: 'flex-start', gap: 8, padding: '10px 12px' } : {}),
                 }}
-                onClick={isAdmin ? () => startEdit(entry.date, entry.muscles) : undefined}
               >
-                <div style={{ minWidth: 120 }}>
-                  <div style={{ fontSize: 13, color: colors.text.secondary, fontWeight: 600 }}>
-                    {formatDate(entry.date)}
-                  </div>
-                  <div style={{ fontSize: 10, color: colors.text.disabled }}>{entry.date}</div>
-                </div>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  {entry.muscles.map((m) => (
-                    <div
-                      key={`${m.group}-${m.muscle || 'group'}`}
-                      onMouseEnter={() => setListHover({ group: m.group, muscle: m.muscle })}
-                      onMouseLeave={() => setListHover(null)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'baseline',
-                        gap: 6,
-                        fontSize: 13,
-                        cursor: 'default',
-                      }}
-                    >
-                      <span style={{ color: getLevelColor(m.level), fontWeight: 'bold', minWidth: 16, textAlign: 'right' }}>
-                        {m.level}
-                      </span>
-                      <span style={{ color: colors.text.secondary }}>
-                        {m.muscle
-                          ? <>{m.group} <span style={{ color: colors.text.tertiary }}>›</span> {m.muscle}</>
-                          : m.group
-                        }
-                      </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
+                  <div>
+                    <div style={{ fontSize: 13, color: colors.text.secondary, fontWeight: 600 }}>
+                      {formatDate(entry.date)}
                     </div>
-                  ))}
+                    <div style={{ fontSize: 10, color: colors.text.disabled }}>{entry.date}</div>
+                  </div>
+                  {isAdmin && (
+                    <button
+                      onClick={() => startEdit(entry.date, entry.muscles)}
+                      style={styles.editIconBtn}
+                      title="Edit entry"
+                    >
+                      <Wrench size={13} />
+                    </button>
+                  )}
+                </div>
+                <div style={{ flex: '1 1 100%', display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  {entry.muscles.map((m) => {
+                    const isPinned = pinnedMuscle?.group === m.group && pinnedMuscle?.muscle === m.muscle;
+                    return (
+                      <div
+                        key={`${m.group}-${m.muscle || 'group'}`}
+                        onClick={() => setPinnedMuscle(isPinned ? null : { group: m.group, muscle: m.muscle })}
+                        onMouseEnter={() => setListHover({ group: m.group, muscle: m.muscle })}
+                        onMouseLeave={() => setListHover(null)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'baseline',
+                          gap: 6,
+                          fontSize: 13,
+                          cursor: 'pointer',
+                          borderRadius: 4,
+                          padding: '1px 4px',
+                          margin: '0 -4px',
+                          backgroundColor: isPinned ? 'rgba(34, 211, 238, 0.08)' : 'transparent',
+                        }}
+                      >
+                        <span style={{ color: getLevelColor(m.level), fontWeight: 'bold', minWidth: 16, textAlign: 'right' }}>
+                          {m.level}
+                        </span>
+                        <span style={{ color: isPinned ? colors.accent.cyan : colors.text.secondary }}>
+                          {m.muscle
+                            ? <>{m.group} <span style={{ color: colors.text.tertiary }}>›</span> {m.muscle}</>
+                            : m.group
+                          }
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             ))}
@@ -360,24 +397,25 @@ export function SorenessTab({ isAdmin }) {
         )}
       </div>
 
-      {/* Right column — always reserves space to prevent layout shift */}
+      {/* Right column — anatomy diagram (pinned or hovered muscle), scrollable on mobile */}
       <div style={{
         ...styles.diagramPanel,
-        opacity: listDiagramGroup ? 1 : 0,
+        ...(isMobile ? { width: 220, flexShrink: 0 } : {}),
+        opacity: activeDiagramGroup ? 1 : 0,
         transition: 'opacity 0.15s ease',
-        pointerEvents: listDiagramGroup ? 'auto' : 'none',
+        pointerEvents: activeDiagramGroup ? 'auto' : 'none',
       }}>
-        {listDiagramGroup ? (
+        {activeDiagramGroup ? (
           <>
-            <AnatomyDiagram group={listDiagramGroup} highlightMuscle={listHover?.muscle} />
+            <AnatomyDiagram group={activeDiagramGroup} highlightMuscle={activeMuscle?.muscle} />
             <div style={{ textAlign: 'center', marginTop: 8 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: colors.accent.cyan }}>
-                {listHover?.muscle || listDiagramGroup}
+                {activeMuscle?.muscle || activeDiagramGroup}
               </div>
-              {listHover?.muscle && (
+              {activeMuscle?.muscle && (
                 <div style={{ fontSize: 11, color: colors.text.tertiary }}>
-                  {MUSCLE_TAXONOMY[listDiagramGroup]?.muscles.find(
-                    m => m.name === listHover.muscle
+                  {MUSCLE_TAXONOMY[activeDiagramGroup]?.muscles.find(
+                    m => m.name === activeMuscle.muscle
                   )?.location}
                 </div>
               )}
@@ -546,12 +584,24 @@ const styles = {
   },
   entryRow: {
     display: 'flex',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 16,
+    gap: '4px 16px',
     padding: '10px 14px',
     backgroundColor: colors.bg.surface,
     border: `1px solid ${colors.border.subtle}`,
     borderRadius: 8,
+  },
+  editIconBtn: {
+    background: 'none',
+    border: 'none',
+    color: colors.text.disabled,
+    cursor: 'pointer',
+    padding: 4,
+    borderRadius: 4,
+    display: 'flex',
+    alignItems: 'center',
+    opacity: 0.6,
   },
   musclePill: {
     display: 'inline-flex',

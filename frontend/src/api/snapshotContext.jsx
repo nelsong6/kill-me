@@ -16,6 +16,7 @@ import {
   getExercisesForDay,
   getLoggedWorkouts,
   getSorenessEntries,
+  getCardioSessions,
 } from './snapshot.js';
 
 const SnapshotContext = createContext(null);
@@ -122,12 +123,18 @@ export function useDataSource() {
     return getSorenessEntries(db);
   }
 
+  async function fetchCardioSessions() {
+    if (isLive) return apiFetch('/api/cardio-sessions');
+    return getCardioSessions(db);
+  }
+
   return {
     fetchCurrentDay,
     fetchWorkoutDay,
     fetchExercises,
     fetchWorkouts,
     fetchSoreness,
+    fetchCardioSessions,
     isLive,
     isReady,
   };

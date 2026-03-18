@@ -42,6 +42,7 @@ function App() {
   const [logInitialDate, setLogInitialDate] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [logViewWorkout, setLogViewWorkout] = useState(null);
+  const [logViewCardio, setLogViewCardio] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(window.innerWidth < 640);
 
   // Push URL when tab changes (but not on initial mount)
@@ -66,6 +67,7 @@ function App() {
   // Navigate to Log tab, optionally pre-filling day/date (e.g. from empty calendar click)
   const handleOpenLog = (dayNumber = null, date = null) => {
     setLogViewWorkout(null);
+    setLogViewCardio(null);
     setLogInitialDay(dayNumber);
     setLogInitialDate(date);
     navigateTab('log');
@@ -73,7 +75,25 @@ function App() {
 
   // Navigate to Log tab showing an existing workout's details
   const handleViewWorkout = (workout) => {
+    if (workout === null) {
+      setLogViewWorkout(null);
+      return;
+    }
     setLogViewWorkout(workout);
+    setLogViewCardio(null);
+    setLogInitialDay(null);
+    setLogInitialDate(null);
+    navigateTab('log');
+  };
+
+  // Navigate to Log tab showing an existing cardio session
+  const handleViewCardio = (session) => {
+    if (session === null) {
+      setLogViewCardio(null);
+      return;
+    }
+    setLogViewCardio(session);
+    setLogViewWorkout(null);
     setLogInitialDay(null);
     setLogInitialDate(null);
     navigateTab('log');
@@ -87,6 +107,7 @@ function App() {
     setLogInitialDay(null);
     setLogInitialDate(null);
     setLogViewWorkout(null);
+    setLogViewCardio(null);
     navigateTab('history');
   };
 
@@ -162,6 +183,7 @@ function App() {
               key={refreshKey}
               onDayClick={isAdmin ? handleOpenLog : undefined}
               onWorkoutClick={isAdmin ? handleViewWorkout : undefined}
+              onCardioClick={isAdmin ? handleViewCardio : undefined}
             />
           )}
 
@@ -183,6 +205,12 @@ function App() {
               onViewWorkout={handleViewWorkout}
               onWorkoutChanged={() => {
                 setLogViewWorkout(null);
+                setRefreshKey(prev => prev + 1);
+              }}
+              viewCardio={logViewCardio}
+              onViewCardio={handleViewCardio}
+              onCardioChanged={() => {
+                setLogViewCardio(null);
                 setRefreshKey(prev => prev + 1);
               }}
             />

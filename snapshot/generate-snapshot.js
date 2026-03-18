@@ -91,6 +91,19 @@ const SCHEMA = `
   );
   CREATE INDEX idx_soreness_date ON soreness_entries(date DESC);
 
+  CREATE TABLE cardio_sessions (
+    id                TEXT PRIMARY KEY,
+    date              TEXT NOT NULL,
+    activity          TEXT NOT NULL,
+    duration_minutes  REAL,
+    notes             TEXT,
+    treadmill         TEXT,
+    bike              TEXT,
+    timestamp         TEXT,
+    created_at        TEXT
+  );
+  CREATE INDEX idx_cardio_date ON cardio_sessions(date DESC);
+
   CREATE TABLE snapshot_meta (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -123,6 +136,7 @@ async function main() {
     loggedWorkouts: 'SELECT * FROM c WHERE c.type = "logged-workout" ORDER BY c.date DESC',
     settings: 'SELECT * FROM c WHERE c.type = "settings"',
     soreness: 'SELECT * FROM c WHERE c.type = "soreness-entry" ORDER BY c.date DESC',
+    cardioSessions: 'SELECT * FROM c WHERE c.type = "cardio-session" ORDER BY c.date DESC',
   };
 
   const results = {};
@@ -198,6 +212,24 @@ async function main() {
     const insertSoreness = db.prepare('INSERT INTO soreness_entries (date, muscles) VALUES (?, ?)');
     for (const doc of results.soreness) {
       insertSoreness.run(doc.date, JSON.stringify(doc.muscles));
+    }
+
+    // Cardio sessions
+    const insertCardio = db.prepare(
+      'INSERT INTO cardio_sessions (id, date, activity, duration_minutes, notes, treadmill, bike, timestamp, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+    for (const doc of results.cardioSessions) {
+      insertCardio.run(
+        doc.id,
+        doc.date,
+        doc.activity,
+        doc.durationMinutes || null,
+        doc.notes || null,
+        doc.treadmill ? JSON.stringify(doc.treadmill) : null,
+        doc.bike ? JSON.stringify(doc.bike) : null,
+        doc.timestamp || null,
+        doc.createdAt || null,
+      );
     }
 
     // Snapshot metadata

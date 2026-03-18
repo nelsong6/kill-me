@@ -1,4 +1,5 @@
 // Log tab — single form for both creating new workouts and editing existing ones.
+// Also handles cardio session logging (treadmill with templates, bike with manual entry).
 //
 // When viewWorkout is null (create mode): form starts with defaults, submits via
 // POST, no delete option. When viewWorkout is set (edit mode): form pre-fills
@@ -13,16 +14,24 @@ import { getDayInfo, DAY_CONFIG } from '../utils/dayConfig';
 import { apiFetch } from '../api/client.js';
 import { todayLocal } from '../utils/dateUtils';
 import { useDataSource } from '../api/snapshotContext.jsx';
+import { TREADMILL_TEMPLATES, getTotalDuration, formatIntervalSummary } from '../utils/cardioTemplates.js';
+import { CARDIO_CONFIG } from '../utils/cardioConfig.js';
 
 export function LogTab({
   initialDay = null,
   initialDate = null,
   onSuccess,
   onViewWorkout,
+  onViewCardio,
   onWorkoutChanged,
+  onCardioChanged,
   viewWorkout = null,
+  viewCardio = null,
   currentDay = 1,
 }) {
+  // Top-level toggle: 'weight' or 'cardio'
+  const [logType, setLogType] = useState(viewCardio ? 'cardio' : 'weight');
+
   const isEditMode = !!viewWorkout;
 
   // --- Form state (shared for create and edit) ---
@@ -48,8 +57,28 @@ export function LogTab({
   // --- Recent workouts ---
   const [recentWorkouts, setRecentWorkouts] = useState([]);
 
+  // --- Cardio form state ---
+  const [cardioActivity, setCardioActivity] = useState('treadmill');
+  const [cardioDate, setCardioDate] = useState(todayLocal());
+  const [cardioTemplateId, setCardioTemplateId] = useState(TREADMILL_TEMPLATES[0]?.id || '');
+  const [cardioNotes, setCardioNotes] = useState('');
+  const [cardioSubmitting, setCardioSubmitting] = useState(false);
+  const [cardioDeleting, setCardioDeleting] = useState(false);
+  const [cardioConfirmDelete, setCardioConfirmDelete] = useState(false);
+  // Bike manual fields
+  const [bikeDuration, setBikeDuration] = useState('');
+  const [bikeDistance, setBikeDistance] = useState('');
+  const [bikeAvgSpeed, setBikeAvgSpeed] = useState('');
+  const [bikeAvgHR, setBikeAvgHR] = useState('');
+  const [bikeCalories, setBikeCalories] = useState('');
+  // Recent cardio
+  const [recentCardio, setRecentCardio] = useState([]);
+
+  const isCardioEditMode = !!viewCardio;
+
   const dateInputRef = useRef(null);
-  const { fetchWorkouts: fetchWorkoutsFromSource, isReady } = useDataSource();
+  const cardioDateRef = useRef(null);
+  const { fetchWorkouts: fetchWorkoutsFromSource, fetchCardioSessions, isReady } = useDataSource();
 
   const dayInfo = getDayInfo(selectedDay);
 
@@ -98,11 +127,49 @@ export function LogTab({
     }
   }, [selectedDay, viewWorkout]);
 
-  // Load recent workouts
+  // Switch logType when viewCardio/viewWorkout changes
+  useEffect(() => {
+    if (viewCardio) setLogType('cardio');
+    else if (viewWorkout) setLogType('weight');
+  }, [viewCardio, viewWorkout]);
+
+  // Populate cardio form from viewCardio (edit) or defaults (create)
+  useEffect(() => {
+    if (viewCardio) {
+      setCardioActivity(viewCardio.activity || 'treadmill');
+      setCardioDate(viewCardio.date || todayLocal());
+      setCardioNotes(viewCardio.notes || '');
+      setCardioConfirmDelete(false);
+      if (viewCardio.treadmill?.templateId) {
+        setCardioTemplateId(viewCardio.treadmill.templateId);
+      }
+      if (viewCardio.bike) {
+        setBikeDuration(viewCardio.durationMinutes || '');
+        setBikeDistance(viewCardio.bike.distanceMiles || '');
+        setBikeAvgSpeed(viewCardio.bike.avgSpeedMph || '');
+        setBikeAvgHR(viewCardio.bike.avgHeartRate || '');
+        setBikeCalories(viewCardio.bike.calories || '');
+      }
+    } else {
+      setCardioDate(todayLocal());
+      setCardioNotes('');
+      setCardioConfirmDelete(false);
+      setBikeDuration('');
+      setBikeDistance('');
+      setBikeAvgSpeed('');
+      setBikeAvgHR('');
+      setBikeCalories('');
+    }
+  }, [viewCardio]);
+
+  // Load recent workouts and cardio
   useEffect(() => {
     if (!isReady) return;
     fetchWorkoutsFromSource().then(data => {
       setRecentWorkouts((data.workouts || []).slice(0, 5));
+    }).catch(() => {});
+    fetchCardioSessions().then(data => {
+      setRecentCardio((data.sessions || []).slice(0, 5));
     }).catch(() => {});
   }, [isReady]);
 
@@ -239,12 +306,112 @@ export function LogTab({
     onViewWorkout?.(null);
   };
 
+  const switchToCardioCreateMode = () => {
+    onViewCardio?.(null);
+  };
+
+  // ─────────────────────────────────────────────
+  // Cardio submit (create or update)
+  // ─────────────────────────────────────────────
+
+  const handleCardioSubmit = async () => {
+    setCardioSubmitting(true);
+    try {
+      const selectedTemplate = TREADMILL_TEMPLATES.find(t => t.id === cardioTemplateId);
+
+      const body = {
+        date: cardioDate,
+        activity: cardioActivity,
+        notes: cardioNotes || '',
+      };
+
+      if (cardioActivity === 'treadmill' && selectedTemplate) {
+        body.durationMinutes = getTotalDuration(selectedTemplate.intervals);
+        body.treadmill = {
+          templateId: selectedTemplate.id,
+          templateName: selectedTemplate.name,
+          intervals: selectedTemplate.intervals,
+        };
+      } else if (cardioActivity === 'bike') {
+        body.durationMinutes = bikeDuration ? parseFloat(bikeDuration) : null;
+        body.bike = {
+          source: 'manual',
+          distanceMiles: bikeDistance ? parseFloat(bikeDistance) : null,
+          avgSpeedMph: bikeAvgSpeed ? parseFloat(bikeAvgSpeed) : null,
+          avgHeartRate: bikeAvgHR ? parseInt(bikeAvgHR) : null,
+          calories: bikeCalories ? parseInt(bikeCalories) : null,
+        };
+      }
+
+      if (isCardioEditMode) {
+        await apiFetch(`/api/cardio-sessions/${viewCardio.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(body),
+        });
+        onCardioChanged?.();
+      } else {
+        await apiFetch('/api/cardio-sessions', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        });
+        onCardioChanged?.();
+      }
+    } catch (error) {
+      console.error('Error saving cardio session:', error);
+      alert('Failed to save cardio session. Please try again.');
+    } finally {
+      setCardioSubmitting(false);
+    }
+  };
+
+  const handleCardioDelete = async () => {
+    setCardioDeleting(true);
+    try {
+      await apiFetch(`/api/cardio-sessions/${viewCardio.id}`, {
+        method: 'DELETE',
+      });
+      onCardioChanged?.();
+    } catch (error) {
+      console.error('Error deleting cardio session:', error);
+      alert('Failed to delete cardio session.');
+    } finally {
+      setCardioDeleting(false);
+    }
+  };
+
   // ─────────────────────────────────────────────
   // Render — one form, always
   // ─────────────────────────────────────────────
 
+  const selectedTemplate = TREADMILL_TEMPLATES.find(t => t.id === cardioTemplateId);
+
   return (
     <div className="max-w-2xl">
+      {/* Log Type Toggle */}
+      <div className="flex gap-3 bg-slate-800/30 backdrop-blur-md rounded-xl p-2 mb-6">
+        <button
+          onClick={() => { setLogType('weight'); onViewCardio?.(null); }}
+          className={`flex-1 py-3 rounded-lg font-bold uppercase tracking-wide transition-all ${
+            logType === 'weight'
+              ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/30'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Weight Workout
+        </button>
+        <button
+          onClick={() => { setLogType('cardio'); onViewWorkout?.(null); }}
+          className={`flex-1 py-3 rounded-lg font-bold uppercase tracking-wide transition-all ${
+            logType === 'cardio'
+              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          Cardio Session
+        </button>
+      </div>
+
+      {logType === 'weight' && (<>
       {/* Header */}
       <div className="mb-6">
         <h2 className="text-4xl font-black text-cyan-400 uppercase tracking-wide mb-2">
@@ -604,6 +771,275 @@ export function LogTab({
         </div>
       )}
 
+      </>)} {/* end logType === 'weight' */}
+
+      {logType === 'cardio' && (<>
+        {/* Cardio Header */}
+        <div className="mb-6">
+          <h2 className="text-4xl font-black uppercase tracking-wide mb-2" style={{ color: CARDIO_CONFIG[cardioActivity]?.color || '#10b981' }}>
+            {isCardioEditMode ? 'Edit Cardio' : 'Log Cardio'}
+          </h2>
+          {isCardioEditMode ? (
+            <button
+              onClick={switchToCardioCreateMode}
+              className="text-sm text-slate-500 hover:text-emerald-400 transition-colors"
+            >
+              ← Log New Cardio Session
+            </button>
+          ) : (
+            <p className="text-slate-400">Track your cardio session</p>
+          )}
+        </div>
+
+        {/* Activity Toggle */}
+        <div className="flex gap-3 bg-slate-800/30 backdrop-blur-md rounded-xl p-2 mb-6">
+          <button
+            onClick={() => setCardioActivity('treadmill')}
+            className={`flex-1 py-3 rounded-lg font-bold uppercase tracking-wide transition-all ${
+              cardioActivity === 'treadmill'
+                ? 'text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'
+            }`}
+            style={cardioActivity === 'treadmill' ? { backgroundColor: CARDIO_CONFIG.treadmill.color, boxShadow: `0 10px 15px -3px ${CARDIO_CONFIG.treadmill.color}50` } : {}}
+          >
+            Treadmill
+          </button>
+          <button
+            onClick={() => setCardioActivity('bike')}
+            className={`flex-1 py-3 rounded-lg font-bold uppercase tracking-wide transition-all ${
+              cardioActivity === 'bike'
+                ? 'text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'
+            }`}
+            style={cardioActivity === 'bike' ? { backgroundColor: CARDIO_CONFIG.bike.color, boxShadow: `0 10px 15px -3px ${CARDIO_CONFIG.bike.color}50` } : {}}
+          >
+            Bike
+          </button>
+        </div>
+
+        {/* Cardio Date Picker */}
+        <div className="mb-4">
+          <label className="block text-sm font-bold text-slate-300 mb-2 uppercase tracking-wide">
+            Date
+          </label>
+          <input
+            ref={cardioDateRef}
+            type="date"
+            value={cardioDate}
+            onChange={(e) => setCardioDate(e.target.value)}
+            onClick={() => { try { cardioDateRef.current?.showPicker(); } catch {} }}
+            max={todayLocal()}
+            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 transition-all cursor-pointer"
+          />
+        </div>
+
+        {/* Treadmill Form */}
+        {cardioActivity === 'treadmill' && (
+          <div className="space-y-4">
+            {/* Template Selector */}
+            <div>
+              <label className="block text-sm font-bold text-slate-300 mb-2 uppercase tracking-wide">
+                Template
+              </label>
+              <select
+                value={cardioTemplateId}
+                onChange={(e) => setCardioTemplateId(e.target.value)}
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-slate-200 focus:outline-none focus:border-emerald-500 cursor-pointer"
+              >
+                {TREADMILL_TEMPLATES.map(t => (
+                  <option key={t.id} value={t.id} className="bg-slate-800">
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Interval Preview */}
+            {selectedTemplate && (
+              <div className="bg-slate-800/50 backdrop-blur-md rounded-xl border border-slate-700/50 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-bold text-slate-300 uppercase tracking-wide">Intervals</h4>
+                  <span className="text-emerald-400 font-bold text-sm">
+                    {getTotalDuration(selectedTemplate.intervals)} min total
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {selectedTemplate.intervals.map((interval, idx) => (
+                    <div
+                      key={idx}
+                      className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm ${
+                        interval.type === 'jog'
+                          ? 'bg-emerald-900/30 border border-emerald-700/30'
+                          : 'bg-slate-700/30 border border-slate-600/30'
+                      }`}
+                    >
+                      <span className={`font-bold uppercase text-xs ${
+                        interval.type === 'jog' ? 'text-emerald-400' : 'text-slate-400'
+                      }`}>
+                        {interval.type}
+                      </span>
+                      <span className="text-slate-300">
+                        {interval.durationMinutes} min @ {interval.speedMph} mph
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Notes */}
+            <div>
+              <label className="block text-sm font-bold text-slate-300 mb-2 uppercase tracking-wide">
+                Notes (optional)
+              </label>
+              <input
+                type="text"
+                value={cardioNotes}
+                onChange={(e) => setCardioNotes(e.target.value)}
+                placeholder="How did it feel?"
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            {/* Submit */}
+            <button
+              onClick={handleCardioSubmit}
+              disabled={cardioSubmitting}
+              className="w-full text-white px-8 py-4 rounded-xl font-black text-xl uppercase tracking-wider shadow-lg transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: `linear-gradient(to right, ${CARDIO_CONFIG.treadmill.color}, #059669)` }}
+            >
+              {cardioSubmitting
+                ? 'Saving...'
+                : isCardioEditMode ? 'Save Changes' : 'Log Treadmill Session'}
+            </button>
+          </div>
+        )}
+
+        {/* Bike Form */}
+        {cardioActivity === 'bike' && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-bold text-slate-300 mb-2 uppercase tracking-wide">
+                  Duration (min)
+                </label>
+                <input
+                  type="number"
+                  value={bikeDuration}
+                  onChange={(e) => setBikeDuration(e.target.value)}
+                  placeholder="45"
+                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-300 mb-2 uppercase tracking-wide">
+                  Distance (mi)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={bikeDistance}
+                  onChange={(e) => setBikeDistance(e.target.value)}
+                  placeholder="12.5"
+                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-300 mb-2 uppercase tracking-wide">
+                  Avg Speed (mph)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={bikeAvgSpeed}
+                  onChange={(e) => setBikeAvgSpeed(e.target.value)}
+                  placeholder="15.2"
+                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-300 mb-2 uppercase tracking-wide">
+                  Avg Heart Rate
+                </label>
+                <input
+                  type="number"
+                  value={bikeAvgHR}
+                  onChange={(e) => setBikeAvgHR(e.target.value)}
+                  placeholder="142"
+                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-300 mb-2 uppercase tracking-wide">
+                  Calories
+                </label>
+                <input
+                  type="number"
+                  value={bikeCalories}
+                  onChange={(e) => setBikeCalories(e.target.value)}
+                  placeholder="450"
+                  className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500"
+                />
+              </div>
+            </div>
+
+            {/* Notes */}
+            <div>
+              <label className="block text-sm font-bold text-slate-300 mb-2 uppercase tracking-wide">
+                Notes (optional)
+              </label>
+              <input
+                type="text"
+                value={cardioNotes}
+                onChange={(e) => setCardioNotes(e.target.value)}
+                placeholder="Route, conditions, etc."
+                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-teal-500"
+              />
+            </div>
+
+            {/* Submit */}
+            <button
+              onClick={handleCardioSubmit}
+              disabled={cardioSubmitting}
+              className="w-full text-white px-8 py-4 rounded-xl font-black text-xl uppercase tracking-wider shadow-lg transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: `linear-gradient(to right, ${CARDIO_CONFIG.bike.color}, #0d9488)` }}
+            >
+              {cardioSubmitting
+                ? 'Saving...'
+                : isCardioEditMode ? 'Save Changes' : 'Log Bike Ride'}
+            </button>
+          </div>
+        )}
+
+        {/* Delete (cardio edit mode only) */}
+        {isCardioEditMode && (
+          <div className="mt-4">
+            {cardioConfirmDelete ? (
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCardioDelete}
+                  disabled={cardioDeleting}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-xl font-bold uppercase tracking-wide transition-all disabled:opacity-50"
+                >
+                  {cardioDeleting ? 'Deleting...' : 'Confirm Delete'}
+                </button>
+                <button
+                  onClick={() => setCardioConfirmDelete(false)}
+                  className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-3 rounded-xl font-bold uppercase tracking-wide transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setCardioConfirmDelete(true)}
+                className="w-full bg-slate-800 hover:bg-red-900/50 text-slate-400 hover:text-red-400 px-6 py-3 rounded-xl font-bold uppercase tracking-wide border border-slate-700 hover:border-red-500/50 transition-all"
+              >
+                Delete Cardio Session
+              </button>
+            )}
+          </div>
+        )}
+      </>)} {/* end logType === 'cardio' */}
+
       {/* Recent Workouts */}
       {recentWorkouts.length > 0 && (
         <div className="mt-8">
@@ -637,6 +1073,48 @@ export function LogTab({
                     </span>
                     <span className="text-slate-600 text-xs">
                       {workout.mode === 'quick' ? '⚡' : '📋'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Recent Cardio */}
+      {recentCardio.length > 0 && (
+        <div className="mt-8">
+          <h3 className="text-lg font-bold text-slate-300 uppercase tracking-wide mb-4">
+            Recent Cardio
+          </h3>
+          <div className="space-y-2">
+            {recentCardio.map(session => {
+              const config = CARDIO_CONFIG[session.activity] || CARDIO_CONFIG.treadmill;
+              const isActive = isCardioEditMode && viewCardio?.id === session.id;
+              return (
+                <div
+                  key={session.id}
+                  onClick={() => onViewCardio?.(session)}
+                  className={`bg-slate-800/30 rounded-xl border p-4 transition-all cursor-pointer hover:scale-[1.01] ${
+                    isActive
+                      ? 'border-emerald-500/50 bg-emerald-500/5'
+                      : 'border-slate-700/50 hover:border-slate-600'
+                  }`}
+                  title="View cardio session"
+                >
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="text-white text-xs font-bold px-2 py-1 rounded-full"
+                      style={{ backgroundColor: config.color }}
+                    >
+                      {config.label}
+                    </span>
+                    <span className="text-slate-300 font-bold text-sm">
+                      {session.durationMinutes ? `${session.durationMinutes} min` : ''}
+                    </span>
+                    <span className="text-slate-500 text-xs ml-auto">
+                      {new Date(session.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </span>
                   </div>
                 </div>
