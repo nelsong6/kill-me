@@ -12,7 +12,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { getDayInfo, DAY_CONFIG } from '../utils/dayConfig';
 import { apiFetch } from '../api/client.js';
-import { todayLocal } from '../utils/dateUtils';
+import { todayLocal, nowLocalTime } from '../utils/dateUtils';
 import { useDataSource } from '../api/snapshotContext.jsx';
 import { TREADMILL_TEMPLATES, getTotalDuration, formatIntervalSummary } from '../utils/cardioTemplates.js';
 import { CARDIO_CONFIG } from '../utils/cardioConfig.js';
@@ -37,6 +37,7 @@ export function LogTab({
   // --- Form state (shared for create and edit) ---
   const [selectedDay, setSelectedDay] = useState(currentDay);
   const [selectedDate, setSelectedDate] = useState(todayLocal());
+  const [selectedTime, setSelectedTime] = useState(nowLocalTime());
   const [mode, setMode] = useState('quick');
   const [exercises, setExercises] = useState([]);
   const [completedExercises, setCompletedExercises] = useState([]);
@@ -60,11 +61,16 @@ export function LogTab({
   // --- Cardio form state ---
   const [cardioActivity, setCardioActivity] = useState('treadmill');
   const [cardioDate, setCardioDate] = useState(todayLocal());
+  const [cardioTime, setCardioTime] = useState(nowLocalTime());
   const [cardioTemplateId, setCardioTemplateId] = useState(TREADMILL_TEMPLATES[0]?.id || '');
   const [cardioNotes, setCardioNotes] = useState('');
   const [cardioSubmitting, setCardioSubmitting] = useState(false);
   const [cardioDeleting, setCardioDeleting] = useState(false);
   const [cardioConfirmDelete, setCardioConfirmDelete] = useState(false);
+  const [cardioCooldown, setCardioCooldown] = useState(false);
+  const [cardioToast, setCardioToast] = useState(null);
+  const cooldownTimerRef = useRef(null);
+  const toastTimerRef = useRef(null);
   // Bike manual fields
   const [bikeDuration, setBikeDuration] = useState('');
   const [bikeDistance, setBikeDistance] = useState('');
@@ -91,6 +97,7 @@ export function LogTab({
       // Edit mode: populate from existing workout
       setSelectedDay(viewWorkout.dayNumber);
       setSelectedDate(viewWorkout.date);
+      setSelectedTime(viewWorkout.time || '');
       setMode(viewWorkout.mode || 'quick');
       setConfirmDelete(false);
 
@@ -115,6 +122,7 @@ export function LogTab({
         setUseNextWorkout(true);
       }
       setSelectedDate(initialDate || todayLocal());
+      setSelectedTime(nowLocalTime());
       setMode('quick');
       setConfirmDelete(false);
     }
@@ -138,6 +146,7 @@ export function LogTab({
     if (viewCardio) {
       setCardioActivity(viewCardio.activity || 'treadmill');
       setCardioDate(viewCardio.date || todayLocal());
+      setCardioTime(viewCardio.time || '');
       setCardioNotes(viewCardio.notes || '');
       setCardioConfirmDelete(false);
       if (viewCardio.treadmill?.templateId) {
@@ -152,6 +161,7 @@ export function LogTab({
       }
     } else {
       setCardioDate(todayLocal());
+      setCardioTime(nowLocalTime());
       setCardioNotes('');
       setCardioConfirmDelete(false);
       setBikeDuration('');
@@ -161,6 +171,14 @@ export function LogTab({
       setBikeCalories('');
     }
   }, [viewCardio]);
+
+  // Clean up cooldown/toast timers on unmount
+  useEffect(() => {
+    return () => {
+      clearTimeout(cooldownTimerRef.current);
+      clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   // Load recent workouts and cardio
   useEffect(() => {
@@ -220,6 +238,7 @@ export function LogTab({
             weight: saved.weight ?? matchedVar.targetWeight ?? '',
             reps: saved.reps ?? matchedVar.targetReps ?? '',
             sets: saved.sets ?? matchedVar.targetSets ?? '',
+            cableSetting: saved.cableSetting ?? matchedVar.cableSetting ?? '',
           };
         }
         return {
@@ -229,6 +248,7 @@ export function LogTab({
           weight: dv.targetWeight || '',
           reps: dv.targetReps || '',
           sets: dv.targetSets || '',
+          cableSetting: dv.cableSetting || '',
         };
       });
 
@@ -241,6 +261,7 @@ export function LogTab({
           weight: ex.weight ?? '',
           reps: ex.reps ?? '',
           sets: ex.sets ?? '',
+          cableSetting: ex.cableSetting ?? '',
         });
       }
 
@@ -272,6 +293,7 @@ export function LogTab({
           method: 'PUT',
           body: JSON.stringify({
             date: selectedDate,
+            time: selectedTime || null,
             dayNumber: selectedDay,
             dayName: dayInfo?.name || `Day ${selectedDay}`,
             mode,
@@ -288,6 +310,7 @@ export function LogTab({
             dayName: dayInfo?.name || `Day ${selectedDay}`,
             mode,
             date: selectedDate,
+            time: selectedTime || null,
             ...(mode === 'detailed' ? { exercises: completed } : {}),
           })
         });
@@ -343,6 +366,7 @@ export function LogTab({
 
       const body = {
         date: cardioDate,
+        time: cardioTime || null,
         activity: cardioActivity,
         notes: cardioNotes || '',
       };
@@ -378,6 +402,16 @@ export function LogTab({
         });
         onCardioChanged?.();
       }
+
+      // Success: show toast and start cooldown
+      const label = cardioActivity === 'treadmill' ? 'Treadmill session' : 'Bike ride';
+      setCardioToast(`${label} logged`);
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => setCardioToast(null), 4000);
+
+      setCardioCooldown(true);
+      clearTimeout(cooldownTimerRef.current);
+      cooldownTimerRef.current = setTimeout(() => setCardioCooldown(false), 10000);
     } catch (error) {
       console.error('Error saving cardio session:', error);
       alert('Failed to save cardio session. Please try again.');
@@ -451,22 +485,35 @@ export function LogTab({
         )}
       </div>
 
-      {/* Date Picker */}
-      <div className="mb-4">
-        <label className="block text-sm font-bold text-slate-300 mb-2 uppercase tracking-wide">
-          Workout Date
-        </label>
-        <input
-          ref={dateInputRef}
-          type="date"
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          onClick={() => {
-            try { dateInputRef.current?.showPicker(); } catch {}
-          }}
-          max={todayLocal()}
-          className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-slate-200 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/30 transition-all cursor-pointer"
-        />
+      {/* Date & Time Picker */}
+      <div className="mb-4 flex gap-3">
+        <div className="flex-1">
+          <label className="block text-sm font-bold text-slate-300 mb-2 uppercase tracking-wide">
+            Workout Date
+          </label>
+          <input
+            ref={dateInputRef}
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            onClick={() => {
+              try { dateInputRef.current?.showPicker(); } catch {}
+            }}
+            max={todayLocal()}
+            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-slate-200 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/30 transition-all cursor-pointer"
+          />
+        </div>
+        <div className="w-32">
+          <label className="block text-sm font-bold text-slate-300 mb-2 uppercase tracking-wide">
+            Time
+          </label>
+          <input
+            type="time"
+            value={selectedTime}
+            onChange={(e) => setSelectedTime(e.target.value)}
+            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-slate-200 focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/30 transition-all cursor-pointer"
+          />
+        </div>
       </div>
 
       {/* Workout to Log - Flipper Toggle */}
@@ -726,6 +773,7 @@ export function LogTab({
                                           updateExercise(idx, 'weight', v.targetWeight || '');
                                           updateExercise(idx, 'reps', v.targetReps || '');
                                           updateExercise(idx, 'sets', v.targetSets || '');
+                                          updateExercise(idx, 'cableSetting', v.cableSetting || '');
                                         }}
                                         className={`text-xs px-2 py-0.5 rounded-full border cursor-pointer transition-all ${
                                           exercise.variation === v.name
@@ -738,8 +786,12 @@ export function LogTab({
                                     ))}
                                   </div>
                                 )}
-                                {(selectedVar.targetWeight || selectedVar.targetReps || selectedVar.targetSets) && (
+                                {(selectedVar.targetWeight || selectedVar.targetReps || selectedVar.targetSets || selectedVar.cableSetting) && (
                                   <div className="text-sm text-slate-400 mb-3">
+                                    {selectedVar.cableSetting && (
+                                      <span className="text-amber-400">Cable: {selectedVar.cableSetting}</span>
+                                    )}
+                                    {selectedVar.cableSetting && selectedVar.targetWeight && <span> · </span>}
                                     {selectedVar.targetWeight && (
                                       <span>Target: {selectedVar.targetWeight} lbs</span>
                                     )}
@@ -756,28 +808,42 @@ export function LogTab({
                           })()}
 
                           {exercise.completed && (
-                            <div className="grid grid-cols-3 gap-2">
-                              <input
-                                type="text"
-                                placeholder="Weight (lbs)"
-                                value={exercise.weight}
-                                onChange={(e) => updateExercise(idx, 'weight', e.target.value)}
-                                className="bg-slate-800 border border-slate-600 rounded px-3 py-2 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-                              />
-                              <input
-                                type="text"
-                                placeholder="Reps"
-                                value={exercise.reps}
-                                onChange={(e) => updateExercise(idx, 'reps', e.target.value)}
-                                className="bg-slate-800 border border-slate-600 rounded px-3 py-2 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-                              />
-                              <input
-                                type="text"
-                                placeholder="Sets"
-                                value={exercise.sets}
-                                onChange={(e) => updateExercise(idx, 'sets', e.target.value)}
-                                className="bg-slate-800 border border-slate-600 rounded px-3 py-2 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-                              />
+                            <div className="space-y-2">
+                              {exercises[idx]?.equipment?.toLowerCase().includes('cable') && (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-slate-400 font-bold uppercase tracking-wide whitespace-nowrap">Cable</span>
+                                  <input
+                                    type="text"
+                                    placeholder="e.g. 11/2"
+                                    value={exercise.cableSetting}
+                                    onChange={(e) => updateExercise(idx, 'cableSetting', e.target.value)}
+                                    className="w-24 bg-slate-800 border border-slate-600 rounded px-3 py-2 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 text-sm"
+                                  />
+                                </div>
+                              )}
+                              <div className="grid grid-cols-3 gap-2">
+                                <input
+                                  type="text"
+                                  placeholder="Weight (lbs)"
+                                  value={exercise.weight}
+                                  onChange={(e) => updateExercise(idx, 'weight', e.target.value)}
+                                  className="bg-slate-800 border border-slate-600 rounded px-3 py-2 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="Reps"
+                                  value={exercise.reps}
+                                  onChange={(e) => updateExercise(idx, 'reps', e.target.value)}
+                                  className="bg-slate-800 border border-slate-600 rounded px-3 py-2 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="Sets"
+                                  value={exercise.sets}
+                                  onChange={(e) => updateExercise(idx, 'sets', e.target.value)}
+                                  className="bg-slate-800 border border-slate-600 rounded px-3 py-2 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                                />
+                              </div>
                             </div>
                           )}
                         </div>
@@ -875,20 +941,33 @@ export function LogTab({
           </button>
         </div>
 
-        {/* Cardio Date Picker */}
-        <div className="mb-4">
-          <label className="block text-sm font-bold text-slate-300 mb-2 uppercase tracking-wide">
-            Date
-          </label>
-          <input
-            ref={cardioDateRef}
-            type="date"
-            value={cardioDate}
-            onChange={(e) => setCardioDate(e.target.value)}
-            onClick={() => { try { cardioDateRef.current?.showPicker(); } catch {} }}
-            max={todayLocal()}
-            className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 transition-all cursor-pointer"
-          />
+        {/* Cardio Date & Time Picker */}
+        <div className="mb-4 flex gap-3">
+          <div className="flex-1">
+            <label className="block text-sm font-bold text-slate-300 mb-2 uppercase tracking-wide">
+              Date
+            </label>
+            <input
+              ref={cardioDateRef}
+              type="date"
+              value={cardioDate}
+              onChange={(e) => setCardioDate(e.target.value)}
+              onClick={() => { try { cardioDateRef.current?.showPicker(); } catch {} }}
+              max={todayLocal()}
+              className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 transition-all cursor-pointer"
+            />
+          </div>
+          <div className="w-32">
+            <label className="block text-sm font-bold text-slate-300 mb-2 uppercase tracking-wide">
+              Time
+            </label>
+            <input
+              type="time"
+              value={cardioTime}
+              onChange={(e) => setCardioTime(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-slate-200 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30 transition-all cursor-pointer"
+            />
+          </div>
         </div>
 
         {/* Treadmill Form */}
@@ -962,13 +1041,20 @@ export function LogTab({
             {/* Submit */}
             <button
               onClick={handleCardioSubmit}
-              disabled={cardioSubmitting}
-              className="w-full text-white px-8 py-4 rounded-xl font-black text-xl uppercase tracking-wider shadow-lg transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={cardioSubmitting || cardioCooldown}
+              className="w-full text-white px-8 py-4 rounded-xl font-black text-xl uppercase tracking-wider shadow-lg transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden"
               style={{ background: `linear-gradient(to right, ${CARDIO_CONFIG.treadmill.color}, #059669)` }}
             >
-              {cardioSubmitting
-                ? 'Saving...'
-                : isCardioEditMode ? 'Save Changes' : 'Log Treadmill Session'}
+              {cardioCooldown && (
+                <span className="absolute inset-0 bg-black/30 origin-right" style={{ animation: 'cooldown-shrink 10s linear forwards' }} />
+              )}
+              <span className="relative">
+                {cardioSubmitting
+                  ? 'Saving...'
+                  : cardioCooldown
+                    ? '✓ Logged'
+                    : isCardioEditMode ? 'Save Changes' : 'Log Treadmill Session'}
+              </span>
             </button>
           </div>
         )}
@@ -1058,13 +1144,20 @@ export function LogTab({
             {/* Submit */}
             <button
               onClick={handleCardioSubmit}
-              disabled={cardioSubmitting}
-              className="w-full text-white px-8 py-4 rounded-xl font-black text-xl uppercase tracking-wider shadow-lg transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={cardioSubmitting || cardioCooldown}
+              className="w-full text-white px-8 py-4 rounded-xl font-black text-xl uppercase tracking-wider shadow-lg transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden"
               style={{ background: `linear-gradient(to right, ${CARDIO_CONFIG.bike.color}, #0d9488)` }}
             >
-              {cardioSubmitting
-                ? 'Saving...'
-                : isCardioEditMode ? 'Save Changes' : 'Log Bike Ride'}
+              {cardioCooldown && (
+                <span className="absolute inset-0 bg-black/30 origin-right" style={{ animation: 'cooldown-shrink 10s linear forwards' }} />
+              )}
+              <span className="relative">
+                {cardioSubmitting
+                  ? 'Saving...'
+                  : cardioCooldown
+                    ? '✓ Logged'
+                    : isCardioEditMode ? 'Save Changes' : 'Log Bike Ride'}
+              </span>
             </button>
           </div>
         )}
@@ -1183,6 +1276,25 @@ export function LogTab({
           </div>
         </div>
       )}
+      {/* Cardio success toast */}
+      {cardioToast && (
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 30 }}
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white px-6 py-3 rounded-xl shadow-lg font-bold text-lg tracking-wide"
+        >
+          ✓ {cardioToast}
+        </motion.div>
+      )}
+
+      {/* Cooldown progress bar animation */}
+      <style>{`
+        @keyframes cooldown-shrink {
+          from { transform: scaleX(1); }
+          to   { transform: scaleX(0); }
+        }
+      `}</style>
     </div>
   );
 }

@@ -22,14 +22,15 @@ import { TabBar } from './components/TabBar';
 import { CycleTab } from './components/CycleTab';
 import { SorenessTab } from './components/SorenessTab';
 import { ExercisesTab } from './components/ExercisesTab';
+import { ListTab } from './components/ListTab';
 import { isAdminMode } from './utils/adminMode';
 import { colors } from './colors';
-import { CalendarDays, Dumbbell, RefreshCw, Activity, PenLine, Wrench, ListChecks } from 'lucide-react';
+import { CalendarDays, Dumbbell, RefreshCw, Activity, PenLine, Wrench, ListChecks, List } from 'lucide-react';
 
 // Map URL path to tab id. Unknown paths fall back to 'history'.
 const tabFromPath = (path) => {
   const slug = path.replace(/^\//, '').toLowerCase();
-  const valid = ['history', 'today', 'exercises', 'cycle', 'soreness', 'log', 'admin'];
+  const valid = ['history', 'list', 'today', 'exercises', 'cycle', 'soreness', 'log', 'admin'];
   return valid.includes(slug) ? slug : 'history';
 };
 
@@ -122,6 +123,7 @@ function App() {
 
   const tabs = [
     { id: 'history', label: 'History', icon: CalendarDays },
+    { id: 'list', label: 'List', icon: List },
     { id: 'today', label: 'Workout', icon: Dumbbell },
     { id: 'exercises', label: 'Exercises', icon: ListChecks },
     { id: 'cycle', label: 'Cycle', icon: RefreshCw },
@@ -201,6 +203,14 @@ function App() {
             <HistoryTab
               key={refreshKey}
               onDayClick={isAdmin ? handleOpenLog : undefined}
+              onWorkoutClick={isAdmin ? handleViewWorkout : undefined}
+              onCardioClick={isAdmin ? handleViewCardio : undefined}
+            />
+          )}
+
+          {activeTab === 'list' && (
+            <ListTab
+              key={refreshKey}
               onWorkoutClick={isAdmin ? handleViewWorkout : undefined}
               onCardioClick={isAdmin ? handleViewCardio : undefined}
             />

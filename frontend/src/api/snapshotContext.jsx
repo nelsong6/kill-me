@@ -14,6 +14,7 @@ import {
   getCurrentDay,
   getWorkoutDay,
   getExercisesForDay,
+  getAllExercises,
   getLoggedWorkouts,
   getSorenessEntries,
   getCardioSessions,
@@ -113,6 +114,11 @@ export function useDataSource() {
     return getExercisesForDay(db, dayNumber);
   }
 
+  async function fetchAllExercises() {
+    if (isLive) return apiFetch('/api/exercises');
+    return getAllExercises(db);
+  }
+
   async function fetchWorkouts() {
     if (isLive) return apiFetch('/api/logged-workouts');
     return getLoggedWorkouts(db);
@@ -132,6 +138,7 @@ export function useDataSource() {
     fetchCurrentDay,
     fetchWorkoutDay,
     fetchExercises,
+    fetchAllExercises,
     fetchWorkouts,
     fetchSoreness,
     fetchCardioSessions,

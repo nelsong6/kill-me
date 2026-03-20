@@ -97,11 +97,20 @@ export function SorenessTab({ isAdmin }) {
   // Search results
   const searchResults = useMemo(() => searchMuscles(searchQuery), [searchQuery]);
 
-  // Start editing a date (new or existing)
+  // Start editing a date (new or existing).
+  // For new entries, carry forward the most recent soreness entry since soreness
+  // commonly persists across multiple days. Carried-forward muscles are marked
+  // so the UI can show them as dismissable suggestions.
   function startEdit(date, existingMuscles = []) {
     setEditDate(date);
     setOriginalDate(existingMuscles.length > 0 ? date : null);
-    setEditMuscles(existingMuscles.map(m => ({ ...m })));
+    if (existingMuscles.length > 0) {
+      setEditMuscles(existingMuscles.map(m => ({ ...m })));
+    } else {
+      // Pre-populate from the most recent entry (entries are sorted newest-first)
+      const previous = entries.length > 0 ? entries[0].muscles : [];
+      setEditMuscles(previous.map(m => ({ ...m, carryForward: true })));
+    }
     setEditing(true);
     setPickerOpen(false);
     setExpandedGroup(null);
@@ -117,10 +126,12 @@ export function SorenessTab({ isAdmin }) {
     setSearchQuery('');
   }
 
-  // Update level for a muscle in the edit
+  // Update level for a muscle in the edit — also clears carryForward flag
+  // since adjusting the slider means the user has accepted this muscle.
   function setLevel(index, level) {
     const updated = [...editMuscles];
-    updated[index] = { ...updated[index], level };
+    const { carryForward, ...rest } = updated[index];
+    updated[index] = { ...rest, level };
     setEditMuscles(updated);
   }
 
@@ -141,9 +152,11 @@ export function SorenessTab({ isAdmin }) {
           // Entry might not exist yet, that's fine
         }
       } else {
+        // Strip carryForward flag before persisting
+        const cleanMuscles = editMuscles.map(({ carryForward, ...rest }) => rest);
         await apiFetch('/api/soreness', {
           method: 'POST',
-          body: JSON.stringify({ date: editDate, muscles: editMuscles }),
+          body: JSON.stringify({ date: editDate, muscles: cleanMuscles }),
         });
       }
       // If date was changed on an existing entry, delete the old one
@@ -201,6 +214,19 @@ export function SorenessTab({ isAdmin }) {
           <div style={{ flex: 1, minWidth: 0 }}>
             {/* Current muscles */}
             <div style={{ marginBottom: 16 }}>
+              {editMuscles.some(m => m.carryForward) && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, padding: '6px 10px', borderRadius: 6, background: colors.bg.tertiary }}>
+                  <span style={{ fontSize: 12, color: colors.text.secondary, flex: 1 }}>
+                    Carried forward from previous entry
+                  </span>
+                  <button
+                    onClick={() => setEditMuscles(editMuscles.filter(m => !m.carryForward))}
+                    style={{ fontSize: 11, color: colors.accent.amber, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}
+                  >
+                    Dismiss all
+                  </button>
+                </div>
+              )}
               {editMuscles.length === 0 ? (
                 <p style={{ color: colors.text.tertiary, fontSize: 13 }}>No muscles added yet. Use the picker below.</p>
               ) : (
@@ -208,6 +234,7 @@ export function SorenessTab({ isAdmin }) {
                   {editMuscles.map((m, i) => (
                     <div key={`${m.group}-${m.muscle || 'group'}`} style={{
                       ...styles.muscleEntry,
+                      ...(m.carryForward ? { borderLeft: `3px solid ${colors.accent.amber}` } : {}),
                       ...(isMobile ? { flexWrap: 'wrap', gap: 8, padding: '8px 10px' } : {}),
                     }}>
                       <div style={{ flex: 1 }}>

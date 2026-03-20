@@ -62,7 +62,8 @@ const SCHEMA = `
     equipment     TEXT,
     location      TEXT,
     notes         TEXT,
-    variations    TEXT
+    variations    TEXT,
+    tags          TEXT
   );
   CREATE INDEX idx_exercises_day ON exercises(day_number);
 
@@ -71,6 +72,7 @@ const SCHEMA = `
     day_number    INTEGER NOT NULL,
     day_name      TEXT,
     date          TEXT NOT NULL,
+    time          TEXT,
     mode          TEXT,
     exercises     TEXT,
     timestamp     TEXT,
@@ -92,6 +94,7 @@ const SCHEMA = `
   CREATE TABLE cardio_sessions (
     id                TEXT PRIMARY KEY,
     date              TEXT NOT NULL,
+    time              TEXT,
     activity          TEXT NOT NULL,
     duration_minutes  REAL,
     notes             TEXT,
@@ -168,7 +171,7 @@ async function main() {
 
     // Exercises
     const insertExercise = db.prepare(
-      'INSERT INTO exercises (id, day_number, name, equipment, location, notes, variations) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO exercises (id, day_number, name, equipment, location, notes, variations, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
     );
     for (const doc of results.exercises) {
       // Build variations — either from the doc's variations array or from
@@ -189,12 +192,13 @@ async function main() {
         doc.location || null,
         doc.notes || null,
         JSON.stringify(variations),
+        Array.isArray(doc.tags) ? JSON.stringify(doc.tags) : null,
       );
     }
 
     // Logged workouts
     const insertWorkout = db.prepare(
-      'INSERT INTO logged_workouts (id, day_number, day_name, date, mode, exercises, timestamp, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO logged_workouts (id, day_number, day_name, date, time, mode, exercises, timestamp, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     for (const doc of results.loggedWorkouts) {
       insertWorkout.run(
@@ -202,6 +206,7 @@ async function main() {
         doc.dayNumber,
         doc.dayName || null,
         doc.date,
+        doc.time || null,
         doc.mode || null,
         doc.exercises?.length ? JSON.stringify(doc.exercises) : null,
         doc.timestamp || null,
@@ -222,12 +227,13 @@ async function main() {
 
     // Cardio sessions
     const insertCardio = db.prepare(
-      'INSERT INTO cardio_sessions (id, date, activity, duration_minutes, notes, treadmill, bike, timestamp, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO cardio_sessions (id, date, time, activity, duration_minutes, notes, treadmill, bike, timestamp, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     for (const doc of results.cardioSessions) {
       insertCardio.run(
         doc.id,
         doc.date,
+        doc.time || null,
         doc.activity,
         doc.durationMinutes || null,
         doc.notes || null,

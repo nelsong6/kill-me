@@ -39,7 +39,7 @@ export function getWorkoutDay(db, dayNumber) {
 // Get exercises for a specific day
 export function getExercisesForDay(db, dayNumber) {
   const result = db.exec(
-    'SELECT id, day_number, name, equipment, location, notes, variations FROM exercises WHERE day_number = ?',
+    'SELECT id, day_number, name, equipment, location, notes, variations, tags FROM exercises WHERE day_number = ?',
     [dayNumber]
   );
 
@@ -47,7 +47,7 @@ export function getExercisesForDay(db, dayNumber) {
     return { exercises: [] };
   }
 
-  const exercises = result[0].values.map(([id, dn, name, equipment, location, notes, variations]) => ({
+  const exercises = result[0].values.map(([id, dn, name, equipment, location, notes, variations, tags]) => ({
     id,
     dayNumber: dn,
     name,
@@ -55,6 +55,31 @@ export function getExercisesForDay(db, dayNumber) {
     location,
     notes,
     variations: variations ? JSON.parse(variations) : [{ name: 'Standard', default: true }],
+    tags: tags ? JSON.parse(tags) : [],
+  }));
+
+  return { exercises };
+}
+
+// Get all exercises across all days
+export function getAllExercises(db) {
+  const result = db.exec(
+    'SELECT id, day_number, name, equipment, location, notes, variations, tags FROM exercises ORDER BY day_number'
+  );
+
+  if (result.length === 0) {
+    return { exercises: [] };
+  }
+
+  const exercises = result[0].values.map(([id, dn, name, equipment, location, notes, variations, tags]) => ({
+    id,
+    dayNumber: dn,
+    name,
+    equipment,
+    location,
+    notes,
+    variations: variations ? JSON.parse(variations) : [{ name: 'Standard', default: true }],
+    tags: tags ? JSON.parse(tags) : [],
   }));
 
   return { exercises };
@@ -63,18 +88,19 @@ export function getExercisesForDay(db, dayNumber) {
 // Get all logged workouts, sorted by date descending
 export function getLoggedWorkouts(db) {
   const result = db.exec(
-    'SELECT id, day_number, day_name, date, mode, exercises, timestamp, created_at FROM logged_workouts ORDER BY date DESC'
+    'SELECT id, day_number, day_name, date, time, mode, exercises, timestamp, created_at FROM logged_workouts ORDER BY date DESC'
   );
 
   if (result.length === 0) {
     return { workouts: [] };
   }
 
-  const workouts = result[0].values.map(([id, dn, dayName, date, mode, exercises, timestamp, createdAt]) => ({
+  const workouts = result[0].values.map(([id, dn, dayName, date, time, mode, exercises, timestamp, createdAt]) => ({
     id,
     dayNumber: dn,
     dayName,
     date,
+    time,
     mode,
     exercises: exercises ? JSON.parse(exercises) : [],
     timestamp,
@@ -105,16 +131,17 @@ export function getSorenessEntries(db) {
 // Get all cardio sessions, sorted by date descending
 export function getCardioSessions(db) {
   const result = db.exec(
-    'SELECT id, date, activity, duration_minutes, notes, treadmill, bike, timestamp, created_at FROM cardio_sessions ORDER BY date DESC'
+    'SELECT id, date, time, activity, duration_minutes, notes, treadmill, bike, timestamp, created_at FROM cardio_sessions ORDER BY date DESC'
   );
 
   if (result.length === 0) {
     return { sessions: [] };
   }
 
-  const sessions = result[0].values.map(([id, date, activity, durationMinutes, notes, treadmill, bike, timestamp, createdAt]) => ({
+  const sessions = result[0].values.map(([id, date, time, activity, durationMinutes, notes, treadmill, bike, timestamp, createdAt]) => ({
     id,
     date,
+    time,
     activity,
     durationMinutes,
     notes,

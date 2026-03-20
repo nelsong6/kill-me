@@ -113,6 +113,26 @@ async function startServer() {
     }
   });
 
+  // Get all exercises across all days (public).
+  // Returns the full exercise library for browsing, filtering, and "add existing" flows.
+  app.get('/api/exercises', async (req, res) => {
+    try {
+      const querySpec = {
+        query: 'SELECT * FROM c WHERE c.type = @type ORDER BY c.dayNumber',
+        parameters: [
+          { name: '@type', value: 'exercise' }
+        ]
+      };
+
+      const { resources: exercises } = await container.items.query(querySpec).fetchAll();
+
+      res.json({ exercises });
+    } catch (error) {
+      console.error('Error fetching all exercises:', error);
+      res.status(500).json({ error: 'Failed to fetch exercises', message: error.message });
+    }
+  });
+
   // Get exercises for a specific day
   app.get('/api/exercises/day/:dayNumber', async (req, res) => {
     try {
@@ -188,7 +208,7 @@ async function startServer() {
   app.post('/api/log-workout', requireAuth, requireAdmin, async (req, res) => {
     try {
       const userId = req.user.sub;
-      const { dayNumber, dayName, mode, date, exercises: completedExercises } = req.body;
+      const { dayNumber, dayName, mode, date, time, exercises: completedExercises } = req.body;
 
       if (!dayNumber) {
         return res.status(400).json({ error: 'Missing required field: dayNumber' });
@@ -205,6 +225,7 @@ async function startServer() {
         dayNumber,
         dayName,
         date: today,
+        time: time || null,
         mode: mode || 'quick',
         exercises: completedExercises || [],
         timestamp: new Date().toISOString(),
@@ -244,7 +265,7 @@ async function startServer() {
   app.put('/api/logged-workouts/:id', requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const { date, dayNumber, dayName, mode, exercises: updatedExercises } = req.body;
+      const { date, time, dayNumber, dayName, mode, exercises: updatedExercises } = req.body;
 
       // Cross-partition query to find the workout by id
       const { resources } = await container.items.query({
@@ -263,6 +284,7 @@ async function startServer() {
       const updated = {
         ...existing,
         ...(date !== undefined && { date }),
+        ...(time !== undefined && { time }),
         ...(dayNumber !== undefined && { dayNumber }),
         ...(dayName !== undefined && { dayName }),
         ...(mode !== undefined && { mode }),
@@ -337,7 +359,7 @@ async function startServer() {
   // Body: { dayNumber, name, equipment?, location?, notes?, variations? }
   app.post('/api/exercises', requireAuth, requireAdmin, async (req, res) => {
     try {
-      const { dayNumber, name, equipment, location, notes, variations } = req.body;
+      const { dayNumber, name, equipment, location, notes, variations, tags } = req.body;
 
       if (!dayNumber || !name) {
         return res.status(400).json({ error: 'Missing required fields: dayNumber and name' });
@@ -351,11 +373,13 @@ async function startServer() {
       const exerciseDoc = {
         id,
         type: 'exercise',
+        userId: 'shared',
         dayNumber,
         name,
         equipment: equipment || '',
         location: location || '',
         notes: notes || '',
+        tags: Array.isArray(tags) ? tags : [],
         variations: variations && variations.length > 0
           ? variations
           : [{ name: 'Standard', default: true, targetWeight: null, targetReps: null, targetSets: null }],
@@ -398,11 +422,26 @@ async function startServer() {
         exercises: 0
       };
 
+      // Clean up old workout day definitions (same partition key fix as exercises)
+      try {
+        const { resources: oldDays } = await newContainer.items
+          .query('SELECT c.id, c.userId FROM c WHERE c.type = "workout-day-definition"')
+          .fetchAll();
+        for (const old of oldDays) {
+          try {
+            await newContainer.item(old.id, old.userId ?? undefined).delete();
+          } catch (delErr) { /* ignore */ }
+        }
+      } catch (cleanupErr) {
+        console.error('Day definition cleanup failed (non-fatal):', cleanupErr.message);
+      }
+
       for (const day of workoutDays) {
         try {
           const dayDoc = {
             id: `workout-day-${day.dayNumber}`,
             type: 'workout-day-definition',
+            userId: 'shared',
             ...day,
             createdAt: new Date().toISOString()
           };
@@ -432,11 +471,31 @@ async function startServer() {
         }
       }
 
+      // Delete all old exercise documents first to avoid partition-key duplicates.
+      // Exercises previously seeded without a userId end up in an undefined partition
+      // and can't be overwritten by upsert with a different partition key value.
+      try {
+        const { resources: oldExercises } = await newContainer.items
+          .query('SELECT c.id, c.userId FROM c WHERE c.type = "exercise"')
+          .fetchAll();
+        for (const old of oldExercises) {
+          try {
+            await newContainer.item(old.id, old.userId ?? undefined).delete();
+          } catch (delErr) {
+            // Ignore — may already be gone
+          }
+        }
+        console.log(`Cleaned up ${oldExercises.length} old exercise documents`);
+      } catch (cleanupErr) {
+        console.error('Exercise cleanup failed (non-fatal):', cleanupErr.message);
+      }
+
       for (const exercise of exercises) {
         try {
           const exerciseDoc = {
             id: `exercise-${exercise.dayNumber}-${exercise.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
             type: 'exercise',
+            userId: 'shared',
             ...exercise,
             createdAt: new Date().toISOString()
           };
@@ -746,7 +805,7 @@ async function startServer() {
   app.post('/api/cardio-sessions', requireAuth, requireAdmin, async (req, res) => {
     try {
       const userId = req.user.sub;
-      const { date, activity, durationMinutes, notes, treadmill, bike } = req.body;
+      const { date, time, activity, durationMinutes, notes, treadmill, bike } = req.body;
 
       if (!date) {
         return res.status(400).json({ error: 'Missing required field: date' });
@@ -760,6 +819,7 @@ async function startServer() {
         type: 'cardio-session',
         userId,
         date,
+        time: time || null,
         activity,
         durationMinutes: durationMinutes || null,
         notes: notes || '',
@@ -781,7 +841,7 @@ async function startServer() {
   app.put('/api/cardio-sessions/:id', requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const { date, activity, durationMinutes, notes, treadmill, bike } = req.body;
+      const { date, time, activity, durationMinutes, notes, treadmill, bike } = req.body;
 
       // Cross-partition query to find the session by id
       const { resources } = await container.items.query({
@@ -800,6 +860,7 @@ async function startServer() {
       const updated = {
         ...existing,
         ...(date !== undefined && { date }),
+        ...(time !== undefined && { time }),
         ...(activity !== undefined && { activity }),
         ...(durationMinutes !== undefined && { durationMinutes }),
         ...(notes !== undefined && { notes }),
