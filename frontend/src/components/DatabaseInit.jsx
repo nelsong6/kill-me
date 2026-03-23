@@ -458,7 +458,7 @@ export function DatabaseInit({ currentDay, onDayChange }) {
           <div>
             <p className="font-bold text-slate-300 mb-1">2. Check API is Running</p>
             <code className="block bg-slate-950 p-2 rounded text-cyan-400">
-              {"curl http://localhost:3000/health"}
+              {"curl http://localhost:3003/health"}
             </code>
           </div>
           

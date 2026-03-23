@@ -9,11 +9,6 @@ locals {
   }
 }
 
-data "azurerm_container_app_environment" "infra" {
-  name                = "infra-aca"
-  resource_group_name = local.infra.resource_group_name
-}
-
 data "azurerm_cosmosdb_account" "infra" {
   name                = "infra-cosmos"
   resource_group_name = local.infra.resource_group_name

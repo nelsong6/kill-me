@@ -1,20 +1,14 @@
-name: Deploy
+name: Deploy Frontend
 
 on:
-  workflow_run:
-    workflows: ["Phase 1 - CI Build"]
+  push:
     branches: [main]
-    types: [completed]
+    paths: ["frontend/**"]
   workflow_dispatch:
 
 permissions:
   id-token: write
   contents: read
-
-env:
-  REGISTRY: ghcr.io
-  # workflow_run uses the triggering workflow's SHA; workflow_dispatch uses the current SHA
-  TARGET_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
   tofu-outputs:
@@ -24,64 +18,13 @@ jobs:
       state_key: kill-me.tfstate
     secrets: inherit
 
-  deploy-backend:
-    name: Deploy Backend API
-    needs: tofu-outputs
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Azure Login via OIDC
-        uses: azure/login@v2
-        with:
-          client-id: ${{ vars.ARM_CLIENT_ID }}
-          tenant-id: ${{ vars.ARM_TENANT_ID }}
-          subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
-
-      - name: Deploy to Container App
-        env:
-          CONTAINER_APP_NAME: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).container_app_name }}
-          RESOURCE_GROUP_NAME: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).resource_group_name }}
-          IMAGE_NAME: ${{ github.repository }}/${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).container_app_name }}
-        run: |
-          az containerapp update \
-            --name "$CONTAINER_APP_NAME" \
-            --resource-group "$RESOURCE_GROUP_NAME" \
-            --image "${{ env.REGISTRY }}/$IMAGE_NAME:${{ env.TARGET_SHA }}"
-
-      - name: Bind Custom Domain & Generate Certificate
-        env:
-          CONTAINER_APP_NAME: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).container_app_name }}
-          RESOURCE_GROUP_NAME: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).resource_group_name }}
-          BACKEND_API_URL: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).backend_api_url }}
-          ACA_ENV_ID: /subscriptions/${{ vars.ARM_SUBSCRIPTION_ID }}/resourceGroups/infra/providers/Microsoft.App/managedEnvironments/${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).container_app_environment_name }}
-        run: |
-          BACKEND_HOSTNAME="${BACKEND_API_URL#https://}"
-          # Skip if certificate is already bound
-          BINDING=$(az containerapp hostname list \
-            --name "$CONTAINER_APP_NAME" \
-            --resource-group "$RESOURCE_GROUP_NAME" \
-            --query "[?name=='$BACKEND_HOSTNAME'].bindingType" -o tsv)
-          if [ "$BINDING" = "SniEnabled" ]; then
-            echo "Certificate already bound for $BACKEND_HOSTNAME, skipping."
-            exit 0
-          fi
-          az containerapp hostname bind \
-            --hostname "$BACKEND_HOSTNAME" \
-            --resource-group "$RESOURCE_GROUP_NAME" \
-            --name "$CONTAINER_APP_NAME" \
-            --environment "$ACA_ENV_ID" \
-            --validation-method CNAME
-
   deploy-frontend:
     name: Deploy Frontend
     needs: tofu-outputs
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          ref: ${{ env.TARGET_SHA }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

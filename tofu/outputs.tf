@@ -34,16 +34,6 @@ output "backend_api_url" {
   description = "The URL of the shared API gateway (workout prefix)"
 }
 
-output "container_app_name" {
-  value       = azurerm_container_app.workout_api.name
-  description = "Name of the backend Container App, picked up by github actions to handle custom dns for container app."
-}
-
-output "container_app_environment_name" {
-  value       = data.azurerm_container_app_environment.infra.name
-  description = "Name of the shared Container App Environment"
-}
-
 output "app_config_prefix" {
   value       = local.front_app_dns_name
   description = "App Configuration key prefix, derived from the frontend DNS name"
