@@ -62,16 +62,8 @@ packages/routes/   @nelsong6/kill-me-routes npm package
   ├── Published to GitHub Packages, consumed by shared api repo
   └── Seed data included (seed-data.js, seed-soreness.js)
 
-backend/           Express.js API (Node 20) — LEGACY, being replaced by shared api
-  ├── Self-signed JWT auth (Microsoft ID token exchange)
-  ├── Azure Cosmos DB NoSQL for storage
-  ├── Azure App Configuration + Key Vault for runtime config
-  ├── CORS via Express middleware (local dev only; production uses infra-level CORS)
-  ├── Deployed as Azure Container App
-  └── Managed identity for all Azure service access
-
 tofu/              OpenTofu infrastructure-as-code
-  └── App-specific resources on top of shared infra
+  └── App-specific resources on top of shared infra (no backend — decommissioned)
 ```
 
 ### Auth model
@@ -107,9 +99,10 @@ This repo builds on shared resources provisioned by **infra-bootstrap**:
 - Key Vault (`romaine-kv`)
 
 App-specific resources created by this repo: the Cosmos DB database and container,
-the Container App, the Static Web App, JWT signing secret in Key Vault, DNS records,
-the Microsoft sign-in app registration, and a per-app App Config key
-(`workout:microsoft_client_id`).
+the Static Web App, JWT signing secret in Key Vault, DNS records, the Microsoft
+sign-in app registration, and a per-app App Config key (`workout:microsoft_client_id`).
+The backend Container App was decommissioned — routes now run in the shared API repo
+at `api.romaine.life/workout`.
 
 See also: **pipeline-templates** for reusable GitHub Actions workflows, and
 **shell-config** for the global Claude config chain and DevOps tooling.
@@ -176,6 +169,10 @@ The frontend displays a git short hash as the build number, injected at build ti
 via Vite's `define` config.
 
 ## Change Log
+
+### 2026-03-23
+
+- **Decommissioned per-app Container App** — deleted `backend.tf`, `container-app-build.yml`, and remaining backend infrastructure. The old `kill-me-api` Container App and its custom domain/certificate/DNS records have been destroyed. Routes now run exclusively in the shared API at `api.romaine.life/workout`. Frontend deploy workflow rewritten to frontend-only (no backend build/push). Tofu outputs cleaned up (removed `container_app_name`, `container_app_environment_name`). Part of the shared API consolidation to eliminate 30-second cold starts.
 
 ### 2026-03-22
 
