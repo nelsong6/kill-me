@@ -57,7 +57,12 @@ snapshot/          SQLite snapshot generator (Node 20)
   ├── Writes a SQLite .db file consumed by the frontend
   └── Runs every 4 hours via GitHub Actions cron
 
-backend/           Express.js API (Node 20)
+packages/routes/   @nelsong6/kill-me-routes npm package
+  ├── Extracted Express router factories (workouts, soreness, cardio, admin)
+  ├── Published to GitHub Packages, consumed by shared api repo
+  └── Seed data included (seed-data.js, seed-soreness.js)
+
+backend/           Express.js API (Node 20) — LEGACY, being replaced by shared api
   ├── Self-signed JWT auth (Microsoft ID token exchange)
   ├── Azure Cosmos DB NoSQL for storage
   ├── Azure App Configuration + Key Vault for runtime config
@@ -141,6 +146,7 @@ All workflows delegate to **nelsong6/pipeline-templates** reusable templates:
 | `tofu-lockfile-update.yml` | Manual dispatch | Regenerates lockfile across platforms |
 | `generate-local-env.yml` | Manual dispatch | Generates `frontend/.env` and `backend/.env` from infra outputs |
 | `snapshot.yml` | Every 4 hours / manual | Generates SQLite snapshot from Cosmos DB and commits it to the repo (`frontend/public/snapshot.db`) |
+| `publish-routes.yml` | Push to main touching `packages/routes/` | Publishes `@nelsong6/kill-me-routes` to GitHub Packages, triggers shared api repo rebuild |
 
 ## Development
 
@@ -170,6 +176,12 @@ The frontend displays a git short hash as the build number, injected at build ti
 via Vite's `define` config.
 
 ## Change Log
+
+### 2026-03-22
+
+- **Extracted backend routes into `@nelsong6/kill-me-routes` npm package** — all route handlers from `server.js` extracted into modular router factories in `packages/routes/`: `createWorkoutRoutes`, `createSorenessRoutes`, `createCardioRoutes`, `createAdminRoutes`. Each accepts dependencies (container, requireAuth, requireAdmin) via injection. Seed data files copied into `packages/routes/data/`. Published to GitHub Packages. Motivation: consolidating all app backends into a single always-on shared Container App (`api` repo) to eliminate 30-second cold starts (~$19/month for always-on 0.25 vCPU / 0.5 Gi). Routes are mounted at `/workout` prefix in the shared API.
+- **Added `publish-routes.yml` workflow** — publishes the route package on push to `packages/routes/` on main, then fires a `repository_dispatch` to the `api` repo to trigger a rebuild.
+- **Updated frontend API URLs** — dev defaults changed from `localhost:3003` to `localhost:3000/workout` (shared API port + prefix). Production `backend_api_url` tofu output updated to `api.romaine.life/workout`.
 
 ### 2026-03-19
 

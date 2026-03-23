@@ -30,8 +30,8 @@ output "cosmos_db_container_name" {
 }
 
 output "backend_api_url" {
-  value       = "https://${local.back_app_dns_name}.${local.infra.dns_zone_name}"
-  description = "The URL of the backend Container App API"
+  value       = "https://api.${local.infra.dns_zone_name}/workout"
+  description = "The URL of the shared API gateway (workout prefix)"
 }
 
 output "container_app_name" {

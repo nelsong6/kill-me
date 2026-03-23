@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { msalInstance, msalReady } from './msal';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/workout';
 
 /** Retry fetch with exponential backoff (handles cold-start 503s). */
 async function fetchWithRetry(url, options, retries = 2) {
