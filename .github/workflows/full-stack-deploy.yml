@@ -38,6 +38,11 @@ jobs:
           tenant-id: ${{ vars.ARM_TENANT_ID }}
           subscription-id: ${{ vars.ARM_SUBSCRIPTION_ID }}
 
+      - name: Generate version.json
+        run: |
+          mkdir -p frontend/public
+          echo "{\"sha\":\"${GITHUB_SHA::7}\",\"deployedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" > frontend/public/version.json
+
       - name: Build Frontend
         working-directory: ./frontend
         env:
