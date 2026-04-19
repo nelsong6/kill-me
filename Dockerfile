@@ -25,14 +25,8 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install backend deps with GitHub Packages auth for @nelsong6 scoped packages.
 COPY backend/package*.json backend/
-ARG NPM_TOKEN
-RUN cd backend && \
-    echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}" > .npmrc && \
-    echo "@nelsong6:registry=https://npm.pkg.github.com" >> .npmrc && \
-    npm install --omit=dev && \
-    rm -f .npmrc
+RUN cd backend && npm install --omit=dev
 
 # Bring the built frontend and the backend source into the runtime image.
 COPY --from=frontend-builder /build/frontend/dist frontend/dist
