@@ -15,9 +15,3 @@ resource "azurerm_key_vault_secret" "jwt_signing_secret" {
   value        = random_password.jwt_signing_secret.result
   key_vault_id = data.azurerm_key_vault.main.id
 }
-
-# TODO: Remove after first successful apply (needed by auth0 provider for teardown)
-data "azurerm_key_vault_secret" "auth0_client_secret" {
-  name         = "auth0-client-secret"
-  key_vault_id = data.azurerm_key_vault.main.id
-}
