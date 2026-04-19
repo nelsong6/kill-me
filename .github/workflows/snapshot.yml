@@ -1,4 +1,4 @@
-name: Snapshot & Deploy Frontend
+name: Snapshot
 
 on:
   schedule:
@@ -17,8 +17,8 @@ jobs:
       state_key: kill-me.tfstate
     secrets: inherit
 
-  generate-and-deploy:
-    name: Generate Snapshot & Deploy Frontend
+  generate-and-commit:
+    name: Generate snapshot.db and commit
     needs: tofu-outputs
     runs-on: ubuntu-latest
     steps:
@@ -63,43 +63,12 @@ jobs:
           node generate-snapshot.js --output ../frontend/public/snapshot.db
 
       - name: Commit snapshot.db to repo
+        # The commit triggers build-and-deploy.yml (matches its frontend/**
+        # paths filter), which rebuilds the Docker image with the new snapshot
+        # baked into frontend/dist, commits the tag bump, ArgoCD rolls the pod.
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add frontend/public/snapshot.db
           git diff --cached --quiet || git commit -m "Update snapshot.db"
           git push
-
-      - name: Install frontend dependencies
-        working-directory: ./frontend
-        run: npm ci
-
-      - name: Build Frontend
-        working-directory: ./frontend
-        env:
-          VITE_API_URL: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).backend_api_url }}
-          VITE_MICROSOFT_CLIENT_ID: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).microsoft_login_client_id }}
-        run: npm run build
-
-      - name: Get Static Web App Token
-        id: swa-token
-        env:
-          STATIC_WEB_APP_NAME: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).static_web_app_name }}
-          RESOURCE_GROUP_NAME: ${{ fromJSON(needs.tofu-outputs.outputs.outputs_json).resource_group_name }}
-        run: |
-          TOKEN=$(az staticwebapp secrets list \
-            --name "$STATIC_WEB_APP_NAME" \
-            --resource-group "$RESOURCE_GROUP_NAME" \
-            --query "properties.apiKey" -o tsv)
-          echo "::add-mask::$TOKEN"
-          echo "deployment_token=$TOKEN" >> $GITHUB_OUTPUT
-
-      - name: Deploy to Azure Static Web App
-        uses: Azure/static-web-apps-deploy@v1
-        with:
-          azure_static_web_apps_api_token: ${{ steps.swa-token.outputs.deployment_token }}
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          action: "upload"
-          app_location: "./frontend/dist"
-          output_location: ""
-          skip_app_build: true

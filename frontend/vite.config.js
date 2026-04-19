@@ -7,8 +7,10 @@ import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-// Get git commit hash
+// Get git commit hash. CI / Docker builds pass BUILD_NUMBER via env since the
+// container isn't a git repo; local dev falls back to the running git.
 const getGitCommit = () => {
+  if (process.env.BUILD_NUMBER) return process.env.BUILD_NUMBER
   try {
     return execSync('git rev-parse --short HEAD').toString().trim()
   } catch (error) {

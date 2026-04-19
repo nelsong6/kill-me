@@ -32,6 +32,6 @@ export const getAdminInfo = () => {
     isLocalhost: isLocalhost(),
     isDev: import.meta.env.DEV,
     hostname: window.location.hostname,
-    apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:3000/workout'
+    apiUrl: window.location.origin
   };
 };

@@ -1,17 +1,6 @@
-# Outputs
 output "resource_group_name" {
   value       = azurerm_resource_group.workout.name
   description = "Name of the resource group"
-}
-
-output "static_web_app_name" {
-  value       = azurerm_static_web_app.workout.name
-  description = "Name of the Azure Static Web App"
-}
-
-output "static_web_app_default_hostname" {
-  value       = azurerm_static_web_app.workout.default_host_name
-  description = "Default hostname of the Static Web App"
 }
 
 output "cosmos_db_name" {
@@ -27,11 +16,6 @@ output "cosmos_db_database_name" {
 output "cosmos_db_container_name" {
   value       = azurerm_cosmosdb_sql_container.workouts.name
   description = "Cosmos DB container name for workouts"
-}
-
-output "backend_api_url" {
-  value       = "https://api.${local.infra.dns_zone_name}/workout"
-  description = "The URL of the shared API gateway (workout prefix)"
 }
 
 output "app_config_prefix" {

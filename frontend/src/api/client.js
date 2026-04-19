@@ -1,5 +1,5 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/workout';
-
+// Same-origin: the backend (backend/server.js) serves both frontend/dist and
+// the API on the same port, so every path is relative.
 export async function apiFetch(path, options = {}) {
   const token = localStorage.getItem('token');
   const headers = {
@@ -13,7 +13,7 @@ export async function apiFetch(path, options = {}) {
 
   let res;
   for (let attempt = 0; attempt < 3; attempt++) {
-    res = await fetch(`${API_URL}${path}`, { ...options, headers });
+    res = await fetch(path, { ...options, headers });
     if (res.status !== 503) break;
     await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
   }

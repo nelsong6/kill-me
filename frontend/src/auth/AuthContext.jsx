@@ -1,8 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { msalInstance, msalReady } from './msal';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/workout';
-
 /** Retry fetch with exponential backoff (handles cold-start 503s). */
 async function fetchWithRetry(url, options, retries = 2) {
   for (let i = 0; i <= retries; i++) {
@@ -58,7 +56,7 @@ export function AuthProvider({ children }) {
 
         if (response?.idToken) {
           try {
-            const res = await fetchWithRetry(`${API_URL}/auth/microsoft/login`, {
+            const res = await fetchWithRetry('/auth/microsoft/login', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ credential: response.idToken }),
