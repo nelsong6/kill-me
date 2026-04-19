@@ -57,10 +57,9 @@ snapshot/          SQLite snapshot generator (Node 20)
   ├── Writes a SQLite .db file consumed by the frontend
   └── Runs every 4 hours via GitHub Actions cron
 
-packages/routes/   @nelsong6/kill-me-routes npm package
-  ├── Extracted Express router factories (workouts, soreness, cardio, admin)
-  ├── Published to GitHub Packages, consumed by shared api repo
-  └── Seed data included (seed-data.js, seed-soreness.js)
+backend/routes/    Express router factories (workouts, soreness, cardio, admin)
+  ├── Imported locally by backend/server.js — no longer published to GitHub Packages
+  └── Seed data included (data/seed-data.js, data/seed-soreness.js)
 
 tofu/              OpenTofu infrastructure-as-code
   └── App-specific resources on top of shared infra (no backend — decommissioned)
@@ -139,7 +138,6 @@ All workflows delegate to **nelsong6/pipeline-templates** reusable templates:
 | `tofu-lockfile-update.yml` | Manual dispatch | Regenerates lockfile across platforms |
 | `generate-local-env.yml` | Manual dispatch | Generates `frontend/.env` and `backend/.env` from infra outputs |
 | `snapshot.yml` | Every 4 hours / manual | Generates SQLite snapshot from Cosmos DB and commits it to the repo (`frontend/public/snapshot.db`) |
-| `publish-routes.yml` | Push to main touching `packages/routes/` | Publishes `@nelsong6/kill-me-routes` to GitHub Packages, triggers shared api repo rebuild |
 
 ## Development
 

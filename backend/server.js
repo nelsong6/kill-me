@@ -15,7 +15,7 @@ import {
   createSorenessRoutes,
   createCardioRoutes,
   createAdminRoutes,
-} from '@nelsong6/kill-me-routes';
+} from './routes/index.js';
 import { createRequireAuth, requireAdmin } from './auth.js';
 import { createMicrosoftRoutes } from './microsoft-routes.js';
 import { fetchConfig } from './config.js';
