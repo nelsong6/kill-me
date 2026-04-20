@@ -92,16 +92,19 @@ day, and admin actions require signing in with the whitelisted Microsoft account
 This repo builds on shared resources provisioned by **infra-bootstrap**:
 
 - Cosmos DB account (`infra-cosmos`)
-- Container App Environment (`infra-aca`)
+- AKS cluster (`infra-aks`) — hosts the `kill-me` namespace pod
+- Azure Container Registry (`romainecr`) — AcrPush granted per-app
 - Azure App Configuration (`infra-appconfig`)
-- DNS zone (`romaine.life`)
+- DNS zone (`romaine.life`) — ExternalDNS manages records from HTTPRoute
 - Key Vault (`romaine-kv`)
 
 App-specific resources created by this repo: the Cosmos DB database and container,
-the Static Web App, JWT signing secret in Key Vault, DNS records, the Microsoft
-sign-in app registration, and a per-app App Config key (`workout:microsoft_client_id`).
-The backend Container App was decommissioned — routes now run in the shared API repo
-at `api.romaine.life/workout`.
+JWT signing secret in Key Vault, the Microsoft sign-in app registration, and a
+per-app App Config key (`workout:microsoft_client_id`). The frontend + backend
+run as a single Node+Express pod in the `kill-me` namespace, served from
+`workout.romaine.life` via HTTPRoute on the shared Envoy Gateway. The prior
+shared-API-at-`api.romaine.life/workout` mount was retired when the api repo
+was archived and deleted on 2026-04-20.
 
 See also: **pipeline-templates** for reusable GitHub Actions workflows, and
 **shell-config** for the global Claude config chain and DevOps tooling.
