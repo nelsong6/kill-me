@@ -10,7 +10,7 @@ locals {
 }
 
 data "azurerm_cosmosdb_account" "infra" {
-  name                = "infra-cosmos"
+  name                = "infra-cosmos-serverless"
   resource_group_name = local.infra.resource_group_name
 }
 
