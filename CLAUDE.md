@@ -91,7 +91,7 @@ day, and admin actions require signing in with the whitelisted Microsoft account
 
 This repo builds on shared resources provisioned by **infra-bootstrap**:
 
-- Cosmos DB account (`infra-cosmos`)
+- Cosmos DB account (`infra-cosmos-serverless`) — pay-per-request, no throughput floor
 - AKS cluster (`infra-aks`) — hosts the `kill-me` namespace pod
 - Azure Container Registry (`romainecr`) — AcrPush granted per-app
 - Azure App Configuration (`infra-appconfig`)
